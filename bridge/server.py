@@ -595,6 +595,9 @@ async def tracking_ws(websocket: WebSocket):
     try:
         while True:
             ws_msg = await websocket.receive()
+            if ws_msg["type"] == "websocket.disconnect":
+                logger.info("Tracking WebSocket disconnected")
+                break
 
             try:
                 msg, frame_bytes = _parse_ws_message(ws_msg)
