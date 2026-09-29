@@ -17,6 +17,7 @@ from .request_guard import RequestGuard
 from .tracker_bridge import TrackerBridge
 from .file_handler import open_video_dialog, open_audio_dialog, open_funscript_dialog, save_funscript_dialog, write_funscript
 from .grants import can_read, can_write
+from .open_files import OpenError, claim as claim_opened_file, open_in_editor
 from .scene_detector import detect_scenes, cancel_detection
 from .video_stitcher import start_stitch_background, get_stitch_progress, cancel_stitching
 from .audio_analyzer import cancel_audio_analysis
@@ -230,6 +231,33 @@ async def write_funscript_endpoint(req: WriteFunscriptRequest):
         return JSONResponse(status_code=400, content={"success": False, "error": "Only .funscript and .json files can be written"})
     result = await write_funscript(req.data, req.path)
     return JSONResponse(content=result)
+
+
+class OpenFileRequest(BaseModel):
+    path: str
+
+
+@app.post("/open")
+async def open_file_endpoint(req: OpenFileRequest, request: Request):
+    if request.headers.get("origin"):
+        return JSONResponse(status_code=403, content={"success": False, "error": "Only programs on this computer can open files"})
+    try:
+        open_in_editor(req.path)
+    except OpenError as e:
+        return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
+    return JSONResponse(content={"success": True})
+
+
+class ClaimRequest(BaseModel):
+    code: str
+
+
+@app.post("/open/claim")
+async def claim_file_endpoint(req: ClaimRequest):
+    try:
+        return JSONResponse(content=claim_opened_file(req.code))
+    except OpenError as e:
+        return JSONResponse(status_code=404, content={"error": str(e)})
 
 
 # --- Updates ---

@@ -93,3 +93,41 @@ def test_open_in_editor_sends_a_code_the_editor_can_claim(folder, monkeypatch):
     assert opened[0].startswith("https://scriptcompiler.com/?bridge=open&code=")
     code = opened[0].split("code=", 1)[1]
     assert open_files.claim(code)["script"]["path"] == script
+
+
+EDITOR = {"Origin": "https://scriptcompiler.com"}
+
+
+def test_a_local_program_can_open_a_file(client, folder, monkeypatch):
+    (script,) = _make(folder, "clip.funscript")
+    opened = []
+    monkeypatch.setattr(open_files, "open_url", opened.append)
+    response = client.post("/open", json={"path": script})
+    assert response.json() == {"success": True}
+    assert "bridge=open&code=" in opened[0]
+
+
+def test_a_web_page_cannot_open_a_file(client, folder, monkeypatch):
+    (script,) = _make(folder, "clip.funscript")
+    opened = []
+    monkeypatch.setattr(open_files, "open_url", opened.append)
+    response = client.post("/open", json={"path": script}, headers=EDITOR)
+    assert response.status_code == 403
+    assert opened == []
+
+
+def test_opening_a_wrong_file_says_why(client, folder):
+    (notes,) = _make(folder, "notes.txt")
+    response = client.post("/open", json={"path": notes})
+    assert response.status_code == 400
+    assert "funscript" in response.json()["error"]
+
+
+def test_the_editor_claims_the_file_once(client, folder):
+    (script,) = _make(folder, "clip.funscript")
+    code = open_files.create_code(script)
+    first = client.post("/open/claim", json={"code": code}, headers=EDITOR)
+    assert first.json()["script"]["path"] == script
+    second = client.post("/open/claim", json={"code": code}, headers=EDITOR)
+    assert second.status_code == 404
+    assert "expired" in second.json()["error"]
