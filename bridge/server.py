@@ -20,14 +20,17 @@ from .scene_detector import detect_scenes, cancel_detection
 from .video_stitcher import start_stitch_background, get_stitch_progress, cancel_stitching
 from .audio_analyzer import cancel_audio_analysis
 from .thumbnail_cache import cancel_pregeneration
-from .settings import get_video_folders, get_settings, update_settings
+from .settings import get_video_folders, get_settings, update_settings, add_video_folder, remove_video_folder
 from .url_loader import start_download as ytdlp_start_download, fetch_video_info as ytdlp_fetch_video_info, get_active_downloads as ytdlp_get_active_downloads
 from .updater import check_for_update, get_cached_update, download_and_run_update
 from .video_library import (
-    get_cached_videos, scan_and_cache, stream_video,
+    get_cached_videos, scan_and_cache, stream_video, invalidate_cache,
     is_path_in_allowed_folders, generate_thumbnail,
     generate_frame_at_time, generate_frames_batch,
 )
+from .desktop import open_path
+from .logs import log_dir
+from .pickers import pick_folder
 from . import thumbnail_cache
 from .ws_handlers import HANDLERS as WS_HANDLERS
 
@@ -52,11 +55,16 @@ app.add_middleware(RequestGuard)
 
 tracker = TrackerBridge()
 _shutdown_server = None
+_loop = None
 
 
 def set_shutdown_callback(cb):
     global _shutdown_server
     _shutdown_server = cb
+
+
+def _schedule_shutdown():
+    asyncio.get_running_loop().call_later(0.3, _shutdown_server)
 
 
 # Active WebSocket connections for broadcasting download progress
@@ -70,6 +78,15 @@ async def _broadcast_to_ws(message: dict):
             await ws.send_json(message)
         except Exception:
             pass
+
+
+async def broadcast_capabilities_changed():
+    await _broadcast_to_ws({"type": "capabilities_changed"})
+
+
+def notify_capabilities_changed():
+    if _loop is not None and _loop.is_running():
+        asyncio.run_coroutine_threadsafe(broadcast_capabilities_changed(), _loop)
 
 
 # --- HTTP Endpoints ---
@@ -90,7 +107,7 @@ async def health():
 
 @app.get("/capabilities")
 async def capabilities():
-    caps = ["files", "scenes", "tracking", "audio_analysis"]
+    caps = ["files", "scenes", "tracking", "audio_analysis", "folders"]
     if get_video_folders():
         caps.append("local_videos")
     return {
@@ -98,6 +115,46 @@ async def capabilities():
         "version": BRIDGE_VERSION,
         "tracking_ready": tracker.is_ready,
     }
+
+
+@app.post("/folders/pick")
+async def pick_folder_endpoint():
+    loop = asyncio.get_running_loop()
+    folder = await loop.run_in_executor(EXECUTOR, pick_folder)
+    if not folder:
+        return JSONResponse(content={"cancelled": True, "folders": get_video_folders()})
+    if not os.path.isdir(folder):
+        return JSONResponse(status_code=400, content={"error": "Folder not found", "folders": get_video_folders()})
+    folders = add_video_folder(folder)
+    invalidate_cache()
+    await broadcast_capabilities_changed()
+    return JSONResponse(content={"folders": folders, "added": os.path.normpath(folder)})
+
+
+class FolderRequest(BaseModel):
+    path: str
+
+
+@app.post("/folders/remove")
+async def remove_folder_endpoint(req: FolderRequest):
+    folders = remove_video_folder(req.path)
+    invalidate_cache()
+    await broadcast_capabilities_changed()
+    return JSONResponse(content={"folders": folders})
+
+
+@app.post("/logs/open")
+async def open_logs_endpoint():
+    open_path(str(log_dir()))
+    return JSONResponse(content={"success": True})
+
+
+@app.post("/shutdown")
+async def shutdown_endpoint():
+    if _shutdown_server is None:
+        return JSONResponse(status_code=503, content={"success": False, "error": "Shutdown is not available"})
+    _schedule_shutdown()
+    return JSONResponse(content={"success": True})
 
 
 class SceneDetectRequest(BaseModel):
@@ -630,6 +687,8 @@ async def tracking_ws(websocket: WebSocket):
 
 @app.on_event("startup")
 async def startup_event():
+    global _loop
+    _loop = asyncio.get_running_loop()
     logger.info("Starting %s v%s", BRIDGE_NAME, BRIDGE_VERSION)
     result = await tracker.initialize()
     if result.get("success"):
@@ -637,12 +696,8 @@ async def startup_event():
     else:
         logger.warning("Tracker not available: %s", result.get("error"))
 
-    # Check for updates (await so it's ready before first /health request)
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(EXECUTOR, check_for_update)
-
-    # Clean up old thumbnail caches in background
-    loop.run_in_executor(EXECUTOR, thumbnail_cache.cleanup_old_caches)
+    _loop.run_in_executor(EXECUTOR, check_for_update)
+    _loop.run_in_executor(EXECUTOR, thumbnail_cache.cleanup_old_caches)
 
 
 

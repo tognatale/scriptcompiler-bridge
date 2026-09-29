@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import logging
@@ -24,16 +25,16 @@ def get_settings_path():
 def load_settings():
     path = get_settings_path()
     if not path.exists():
-        return dict(DEFAULT_SETTINGS)
+        return copy.deepcopy(DEFAULT_SETTINGS)
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        merged = dict(DEFAULT_SETTINGS)
+        merged = copy.deepcopy(DEFAULT_SETTINGS)
         merged.update(data)
         return merged
     except Exception as e:
         logger.warning("Failed to load settings from %s: %s", path, e)
-        return dict(DEFAULT_SETTINGS)
+        return copy.deepcopy(DEFAULT_SETTINGS)
 
 
 def save_settings(settings):
@@ -50,12 +51,26 @@ def get_video_folders():
     return load_settings().get("video_folders", [])
 
 
+def _same_folder(a, b):
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
 def add_video_folder(folder):
     folder = os.path.normpath(folder)
     settings = load_settings()
-    folders = settings.get("video_folders", [])
-    if folder not in folders:
+    folders = list(settings.get("video_folders", []))
+    if not any(_same_folder(folder, f) for f in folders):
         folders.append(folder)
+        settings["video_folders"] = folders
+        save_settings(settings)
+    return folders
+
+
+def remove_video_folder(folder):
+    settings = load_settings()
+    current = list(settings.get("video_folders", []))
+    folders = [f for f in current if not _same_folder(folder, f)]
+    if len(folders) != len(current):
         settings["video_folders"] = folders
         save_settings(settings)
     return folders

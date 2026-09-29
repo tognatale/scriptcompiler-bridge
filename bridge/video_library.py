@@ -180,6 +180,7 @@ def scan_video_folders(folders=None):
         folders = get_video_folders()
 
     videos = []
+    seen = set()
     ext_set = set("." + ext.lower() for ext in VIDEO_EXTENSIONS)
 
     for folder in folders:
@@ -192,6 +193,10 @@ def scan_video_folders(folders=None):
                     continue
 
                 full_path = os.path.join(root, fname)
+                key = os.path.normcase(os.path.realpath(full_path))
+                if key in seen:
+                    continue
+                seen.add(key)
                 try:
                     stat = os.stat(full_path)
                 except OSError:
