@@ -14,14 +14,10 @@ if sys.stderr is None:
 import uvicorn
 
 from bridge.config import DEFAULT_PORT, DEFAULT_HOST, BRIDGE_NAME, BRIDGE_VERSION
+from bridge.logs import setup_logging
 from bridge.request_guard import allow_bind_host
 from bridge.server import set_shutdown_callback
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
 logger = logging.getLogger(__name__)
 
 # Suppress harmless ConnectionResetError from asyncio (browser cancels video range requests on seek)
@@ -38,6 +34,7 @@ def main():
     parser.add_argument("--host", default=DEFAULT_HOST, help=f"Host to bind to (default: {DEFAULT_HOST})")
     parser.add_argument("--no-tray", action="store_true", help="Disable system tray icon")
     args = parser.parse_args()
+    setup_logging()
     allow_bind_host(args.host)
 
     logger.info("Starting %s v%s on %s:%d", BRIDGE_NAME, BRIDGE_VERSION, args.host, args.port)
@@ -47,6 +44,7 @@ def main():
         host=args.host,
         port=args.port,
         log_level="info",
+        log_config=None,
         access_log=False,
     )
     server = uvicorn.Server(server_config)
