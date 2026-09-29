@@ -7,6 +7,8 @@ GITHUB_REPO = "telemacy/scriptcompiler-bridge"
 DEFAULT_PORT = 9876
 DEFAULT_HOST = "127.0.0.1"
 
+EDITOR_URL = "https://scriptcompiler.com"
+
 CORS_ALLOW_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://(.*\.)?scriptcompiler\.com$"
 
 VIDEO_EXTENSIONS = ["mp4", "webm", "mkv", "avi", "mov", "wmv", "flv", "m4v"]
