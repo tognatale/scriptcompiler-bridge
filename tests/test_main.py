@@ -86,3 +86,13 @@ def test_start_after_an_update_waits_for_the_old_bridge(monkeypatch, calls):
     monkeypatch.setattr(main, "probe_port", lambda host, port: "bridge")
     main.main(["--updated", "--port", "9899"])
     assert waited == [9899]
+
+
+def test_mac_removes_the_old_app_after_the_old_bridge_is_gone(monkeypatch, calls):
+    steps = []
+    monkeypatch.setattr(main.sys, "platform", "darwin")
+    monkeypatch.setattr(main, "wait_for_port_free", lambda host, port: steps.append("wait"))
+    monkeypatch.setattr(main, "cleanup_old_mac_app", lambda: steps.append("cleanup"))
+    monkeypatch.setattr(main, "probe_port", lambda host, port: "bridge")
+    main.main(["--updated", "--port", "9899"])
+    assert steps == ["wait", "cleanup"]

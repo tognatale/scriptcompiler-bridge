@@ -22,6 +22,7 @@ from bridge.settings import sync_autostart
 from bridge.startup import (
     is_first_run, mark_first_run_done, probe_port, startup_actions, wait_for_port_free, wait_for_server,
 )
+from bridge.updater import cleanup_old_mac_app
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,8 @@ def main(argv=None):
 
     if args.updated:
         wait_for_port_free(args.host, args.port)
+    if sys.platform == "darwin":
+        cleanup_old_mac_app()
 
     state = probe_port(args.host, args.port)
     if state == "bridge":
