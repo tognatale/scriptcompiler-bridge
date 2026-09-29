@@ -1,10 +1,11 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 websockets>=13.0
-opencv-contrib-python>=4.10.0
+opencv-contrib-python>=4.10.0; sys_platform != "linux"
+opencv-contrib-python-headless>=4.10.0; sys_platform == "linux"
 numpy>=1.26.0
 scenedetect>=0.6.4
-pystray>=0.19.5
+pystray>=0.19.5; sys_platform != "linux"
 Pillow>=10.4.0
 librosa>=0.10.0
 soundfile>=0.12.0

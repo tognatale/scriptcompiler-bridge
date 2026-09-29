@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ScriptCompiler Bridge
+Comment=Connects ScriptCompiler to the videos on this computer
+Exec=ScriptCompilerBridge
+Icon=scriptcompiler-bridge
+Terminal=false
+Categories=AudioVideo;Video;

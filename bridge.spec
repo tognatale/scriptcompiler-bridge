@@ -7,10 +7,13 @@ import os
 
 block_cipher = None
 is_mac = sys.platform == 'darwin'
+is_linux = sys.platform.startswith('linux')
+is_windows = sys.platform == 'win32'
+exe_suffix = '.exe' if is_windows else ''
 
 # Locate ffmpeg binary to bundle
 _ffmpeg_binaries = []
-_ffmpeg_name = 'ffmpeg.exe' if not is_mac else 'ffmpeg'
+_ffmpeg_name = 'ffmpeg' + exe_suffix
 _ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(SPEC)), 'ffmpeg', _ffmpeg_name)
 if os.path.isfile(_ffmpeg_path):
     _ffmpeg_binaries.append((_ffmpeg_path, 'ffmpeg'))
@@ -20,7 +23,7 @@ else:
 
 # Locate yt-dlp binary to bundle
 _ytdlp_binaries = []
-_ytdlp_name = 'yt-dlp.exe' if not is_mac else 'yt-dlp'
+_ytdlp_name = 'yt-dlp' + exe_suffix
 _ytdlp_path = os.path.join(os.path.dirname(os.path.abspath(SPEC)), 'yt-dlp', _ytdlp_name)
 if os.path.isfile(_ytdlp_path):
     _ytdlp_binaries.append((_ytdlp_path, 'yt-dlp'))
@@ -74,7 +77,7 @@ tracker_exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=not is_mac,
+    upx=is_windows,
     console=False,
     icon=None,
 )
@@ -113,7 +116,7 @@ bridge_hidden = [
 
 if is_mac:
     bridge_hidden.append('pystray._darwin')
-else:
+elif is_windows:
     bridge_hidden.append('pystray._win32')
 
 bridge_a = Analysis(
@@ -125,7 +128,7 @@ bridge_a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=_global_excludes,
+    excludes=_global_excludes + (['pystray', 'tkinter'] if is_linux else []),
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -141,9 +144,9 @@ bridge_exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=not is_mac,
+    upx=is_windows,
     console=False,
-    icon='icon.ico' if not is_mac else None,
+    icon='icon.ico' if is_windows else None,
     version_info=None,
 )
 
@@ -158,7 +161,7 @@ coll = COLLECT(
     tracker_a.zipfiles,
     tracker_a.datas,
     strip=False,
-    upx=not is_mac,
+    upx=is_windows,
     upx_exclude=[],
     name='ScriptCompilerBridge',
 )
