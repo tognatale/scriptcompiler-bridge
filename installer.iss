@@ -7,7 +7,7 @@
   #define MyAppVersion "1.2.2"
 #endif
 #define MyAppPublisher "ScriptCompiler"
-#define MyAppURL "https://github.com/scriptcompiler/scriptcompiler-bridge"
+#define MyAppURL "https://github.com/tognatale/scriptcompiler-bridge"
 #define MyAppExeName "ScriptCompilerBridge.exe"
 
 [Setup]
@@ -53,12 +53,17 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; Launch on startup (current user only)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: string; ValueName: "ScriptCompilerBridge"; \
-    ValueData: """{app}\{#MyAppExeName}"""; \
+    ValueData: """{app}\{#MyAppExeName}"" --autostart"; \
     Flags: uninsdeletevalue; Tasks: launchstartup
+; The bridge can also add this value itself, so always remove it on uninstall
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
+    ValueType: none; ValueName: "ScriptCompilerBridge"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; \
-    Flags: nowait postinstall shellexec
+    Flags: nowait postinstall shellexec skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--updated"; \
+    Flags: nowait shellexec skipifnotsilent
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/F /IM ScriptCompilerBridge.exe"; Flags: runhidden
