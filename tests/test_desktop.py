@@ -41,10 +41,19 @@ def test_editor_url_can_point_at_a_dev_editor(monkeypatch):
     assert desktop.editor_url() == "http://localhost:3000/?bridge=connect"
 
 
-def test_open_editor_opens_the_browser(monkeypatch, calls):
+def test_open_editor_on_windows_opens_the_browser(monkeypatch, calls):
+    _on(monkeypatch, "win32")
     monkeypatch.delenv("SC_EDITOR_URL", raising=False)
     desktop.open_editor()
     assert calls["browser"] == ["https://scriptcompiler.com/?bridge=connect"]
+
+
+def test_open_editor_on_linux_uses_xdg_open(monkeypatch, calls):
+    _on(monkeypatch, "linux")
+    monkeypatch.delenv("SC_EDITOR_URL", raising=False)
+    desktop.open_editor()
+    assert calls["popen"] == [["xdg-open", "https://scriptcompiler.com/?bridge=connect"]]
+    assert calls["browser"] == []
 
 
 def test_notify_on_windows_uses_the_tray_icon(monkeypatch, calls):
@@ -109,3 +118,57 @@ def test_stop_tray_stops_the_icon(calls):
 
 def test_stop_tray_without_icon_does_nothing(calls):
     desktop.stop_tray()
+
+
+@pytest.fixture
+def programs(monkeypatch):
+    available = set()
+    monkeypatch.setattr(desktop.shutil, "which", lambda name: f"/usr/bin/{name}" if name in available else None)
+    return available
+
+
+def test_notify_on_linux_uses_notify_send(monkeypatch, calls, programs):
+    _on(monkeypatch, "linux")
+    programs.add("notify-send")
+    desktop.notify("ScriptCompiler Bridge", "Running")
+    assert calls["run"] == [[
+        "notify-send", "-a", "ScriptCompiler Bridge", "-i", "scriptcompiler-bridge",
+        "ScriptCompiler Bridge", "Running",
+    ]]
+
+
+def test_notify_on_linux_without_notify_send_only_logs(monkeypatch, calls, programs):
+    _on(monkeypatch, "linux")
+    desktop.notify("ScriptCompiler Bridge", "Running")
+    assert calls["run"] == []
+
+
+@pytest.mark.parametrize("available, expected", [
+    ({"zenity", "kdialog", "notify-send"},
+     ["zenity", "--error", "--no-markup", "--title", "ScriptCompiler Bridge", "--text", "Port busy."]),
+    ({"kdialog", "notify-send"},
+     ["kdialog", "--title", "ScriptCompiler Bridge", "--error", "Port busy."]),
+    ({"notify-send"},
+     ["notify-send", "-a", "ScriptCompiler Bridge", "-u", "critical", "ScriptCompiler Bridge", "Port busy."]),
+])
+def test_show_error_on_linux(monkeypatch, calls, programs, available, expected):
+    _on(monkeypatch, "linux")
+    programs.update(available)
+    desktop.show_error("Port busy.")
+    assert calls["run"] == [expected]
+
+
+def test_system_env_restores_the_library_path_when_frozen(monkeypatch):
+    monkeypatch.setattr(desktop.sys, "frozen", True, raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/_MEI123")
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/usr/local/lib")
+    env = desktop.system_env()
+    assert env["LD_LIBRARY_PATH"] == "/usr/local/lib"
+    assert "LD_LIBRARY_PATH_ORIG" not in env
+
+
+def test_system_env_drops_the_bundle_library_path_when_frozen(monkeypatch):
+    monkeypatch.setattr(desktop.sys, "frozen", True, raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/_MEI123")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    assert "LD_LIBRARY_PATH" not in desktop.system_env()
