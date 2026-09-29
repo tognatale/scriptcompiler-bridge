@@ -12,7 +12,7 @@ from typing import Optional
 
 from urllib.parse import quote as url_encode
 
-from .config import BRIDGE_VERSION, BRIDGE_NAME, CORS_ALLOW_ORIGIN_REGEX, DEFAULT_PORT, EXECUTOR
+from .config import BRIDGE_VERSION, BRIDGE_NAME, CORS_ALLOW_ORIGIN_REGEX, DEFAULT_PORT, EXECUTOR, FUNSCRIPT_EXTENSIONS
 from .request_guard import RequestGuard
 from .tracker_bridge import TrackerBridge
 from .file_handler import open_video_dialog, open_audio_dialog, open_funscript_dialog, save_funscript_dialog, write_funscript, is_dialog_allowed_path
@@ -164,6 +164,8 @@ async def write_funscript_endpoint(req: WriteFunscriptRequest):
     folders = get_video_folders()
     if not folders or not is_path_in_allowed_folders(req.path, folders):
         return JSONResponse(status_code=403, content={"success": False, "error": "Access denied"})
+    if os.path.splitext(req.path)[1].lower().lstrip(".") not in FUNSCRIPT_EXTENSIONS:
+        return JSONResponse(status_code=400, content={"success": False, "error": "Only .funscript and .json files can be written"})
     result = await write_funscript(req.data, req.path)
     return JSONResponse(content=result)
 
