@@ -72,8 +72,94 @@ def test_picker_failure_returns_none(monkeypatch, runs):
     assert pickers.pick_folder() is None
 
 
-def test_other_platforms_have_no_picker_yet(monkeypatch, runs):
-    _on(monkeypatch, "linux")
+def test_unknown_platforms_have_no_picker(monkeypatch, runs):
+    _on(monkeypatch, "freebsd")
     seen = runs(Result(b"/home/me/videos\n"))
     assert pickers.pick_folder() is None
     assert seen == []
+
+
+@pytest.fixture
+def tools(monkeypatch):
+    available = set()
+    monkeypatch.setattr(pickers.shutil, "which", lambda name: f"/usr/bin/{name}" if name in available else None)
+    return available
+
+
+def test_linux_folder_picker_uses_zenity(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    tools.update({"zenity", "kdialog"})
+    seen = runs(Result("/home/me/Vidéos\n".encode("utf-8")))
+    assert pickers.pick_folder() == "/home/me/Vidéos"
+    args, kwargs = seen[0]
+    assert args[:3] == ["zenity", "--file-selection", "--directory"]
+    assert "env" in kwargs
+
+
+def test_linux_folder_picker_falls_back_to_kdialog(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    tools.add("kdialog")
+    seen = runs(Result(b"/home/me/videos\n"))
+    assert pickers.pick_folder() == "/home/me/videos"
+    args, _ = seen[0]
+    assert args[0] == "kdialog"
+    assert "--getexistingdirectory" in args
+
+
+def test_linux_without_a_picker_says_what_to_install(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    runs(Result(b""))
+    with pytest.raises(pickers.PickerUnavailable, match="zenity"):
+        pickers.pick_folder()
+
+
+def test_linux_cancel_returns_none(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    tools.add("zenity")
+    runs(Result(b"", returncode=1))
+    assert pickers.pick_folder() is None
+
+
+def test_linux_open_file_filters_by_extension(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    tools.add("zenity")
+    seen = runs(Result(b"/home/me/a.mp4\n"))
+    assert pickers.pick_file("Open Video", ["mp4", "mkv"], "Video files") == "/home/me/a.mp4"
+    args, _ = seen[0]
+    assert "--title=Open Video" in args
+    assert "--file-filter=Video files | *.mp4 *.mkv" in args
+
+
+def test_linux_open_file_with_kdialog(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    tools.add("kdialog")
+    seen = runs(Result(b"/home/me/a.mp4\n"))
+    assert pickers.pick_file("Open Video", ["mp4"], "Video files") == "/home/me/a.mp4"
+    args, _ = seen[0]
+    assert args[args.index("--getopenfilename") + 2] == "*.mp4|Video files"
+
+
+def test_linux_save_file_starts_with_the_default_name(monkeypatch, runs, tools):
+    _on(monkeypatch, "linux")
+    tools.add("zenity")
+    seen = runs(Result(b"/home/me/clip.funscript\n"))
+    result = pickers.pick_save_file("Save Funscript", "clip.funscript", ["funscript"], "Funscript files")
+    assert result == "/home/me/clip.funscript"
+    args, _ = seen[0]
+    assert "--save" in args
+    assert any(a.startswith("--filename=") and a.endswith("clip.funscript") for a in args)
+
+
+def test_mac_open_file_uses_choose_file(monkeypatch, runs):
+    _on(monkeypatch, "darwin")
+    seen = runs(Result(b"/Users/me/a.mp4\n"))
+    assert pickers.pick_file("Open Video", ["mp4"]) == "/Users/me/a.mp4"
+    assert any('choose file with prompt "Open Video"' in part for part in seen[0][0])
+
+
+def test_mac_save_file_uses_choose_file_name(monkeypatch, runs):
+    _on(monkeypatch, "darwin")
+    seen = runs(Result(b"/Users/me/clip.funscript\n"))
+    assert pickers.pick_save_file("Save Funscript", "clip.funscript") == "/Users/me/clip.funscript"
+    expected = 'choose file name with prompt "Save Funscript" default name "clip.funscript"'
+    assert any(expected in part for part in seen[0][0])
