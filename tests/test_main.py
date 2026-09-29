@@ -88,6 +88,28 @@ def test_start_after_an_update_waits_for_the_old_bridge(monkeypatch, calls):
     assert waited == [9899]
 
 
+class FakeServer:
+    def __init__(self, config):
+        self.started = True
+        self.should_exit = False
+
+    def run(self):
+        pass
+
+
+def test_a_started_bridge_keeps_yt_dlp_up_to_date(monkeypatch, calls):
+    started = []
+    monkeypatch.setattr(main, "probe_port", lambda host, port: "free")
+    monkeypatch.setattr(main, "is_first_run", lambda: False)
+    monkeypatch.setattr(main, "sync_autostart", lambda: None)
+    monkeypatch.setattr(main, "set_shutdown_callback", lambda callback: None)
+    monkeypatch.setattr(main, "wait_for_server", lambda server, thread: True)
+    monkeypatch.setattr(main.uvicorn, "Server", FakeServer)
+    monkeypatch.setattr(main, "start_ytdlp_updates", lambda: started.append(True))
+    assert main.main(["--no-tray", "--port", "9899"]) == 0
+    assert started == [True]
+
+
 def test_mac_removes_the_old_app_after_the_old_bridge_is_gone(monkeypatch, calls):
     steps = []
     monkeypatch.setattr(main.sys, "platform", "darwin")
