@@ -4,6 +4,7 @@ import signal
 import sys
 
 from .config import BRIDGE_VERSION
+from .desktop import set_tray_icon
 from .settings import get_video_folders, set_video_folder
 from .video_library import invalidate_cache
 
@@ -63,23 +64,16 @@ def _get_folder_label():
     return "Video Folder: (not set)"
 
 
-def run_tray(port, shutdown_callback):
+def run_tray(port, quit_callback, on_ready=None):
     """Run system tray icon. Must be called on the main thread (Windows requirement)."""
-    try:
-        import pystray
-        from pystray import MenuItem as Item
-    except ImportError:
-        logger.warning("pystray not installed, running without tray icon")
-        return None
+    import pystray
+    from pystray import MenuItem as Item
 
     icon_image = _load_icon_image()
 
     def on_quit(icon, item):
         logger.info("Quit requested from tray")
-        icon.stop()
-        if shutdown_callback:
-            shutdown_callback()
-        os._exit(0)
+        quit_callback()
 
     def on_set_folder(icon, item):
         folder = _pick_folder()
@@ -111,5 +105,10 @@ def run_tray(port, shutdown_callback):
         menu=menu,
     )
 
-    icon.run()
-    return icon
+    def setup(icon):
+        icon.visible = True
+        set_tray_icon(icon)
+        if on_ready:
+            on_ready()
+
+    icon.run(setup=setup)

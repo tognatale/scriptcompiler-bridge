@@ -3,6 +3,7 @@ import os
 import logging
 import sys
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 from .config import SETTINGS_DIR_NAME, SETTINGS_FILE_NAME
 
@@ -101,6 +102,35 @@ def _get_app_executable():
     return None
 
 
+def _autostart_command(exe_path):
+    return f'"{exe_path}" --autostart'
+
+
+def _macos_plist(exe_path):
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.scriptcompiler.bridge</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{xml_escape(exe_path)}</string>
+        <string>--autostart</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>"""
+
+
+def sync_autostart():
+    if _get_app_executable() and _get_autostart():
+        _set_autostart(True)
+
+
 def _get_autostart():
     """Check if autostart is currently enabled in the OS."""
     if sys.platform == 'win32':
@@ -149,7 +179,7 @@ def _set_autostart_windows(enabled):
             if enabled:
                 exe_path = _get_app_executable()
                 if exe_path:
-                    winreg.SetValueEx(key, "ScriptCompilerBridge", 0, winreg.REG_SZ, f'"{exe_path}"')
+                    winreg.SetValueEx(key, "ScriptCompilerBridge", 0, winreg.REG_SZ, _autostart_command(exe_path))
                     logger.info("Autostart enabled: %s", exe_path)
                 else:
                     logger.warning("Cannot enable autostart: not running as frozen executable")
@@ -177,25 +207,9 @@ def _set_autostart_macos(enabled):
         if not exe_path:
             logger.warning("Cannot enable autostart: not running as frozen executable")
             return
-        plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.scriptcompiler.bridge</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{exe_path}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-</dict>
-</plist>"""
         try:
             plist_path.parent.mkdir(parents=True, exist_ok=True)
-            plist_path.write_text(plist_content)
+            plist_path.write_text(_macos_plist(exe_path))
             logger.info("Autostart enabled (macOS): %s", plist_path)
         except Exception as e:
             logger.error("Failed to create launch agent: %s", e)
