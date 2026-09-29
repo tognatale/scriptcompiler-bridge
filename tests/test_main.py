@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 import main
@@ -118,3 +120,48 @@ def test_mac_removes_the_old_app_after_the_old_bridge_is_gone(monkeypatch, calls
     monkeypatch.setattr(main, "probe_port", lambda host, port: "bridge")
     main.main(["--updated", "--port", "9899"])
     assert steps == ["wait", "cleanup"]
+
+
+@pytest.fixture
+def fresh_start(monkeypatch):
+    monkeypatch.setattr(main, "probe_port", lambda host, port: "free")
+    monkeypatch.setattr(main, "is_first_run", lambda: True)
+    monkeypatch.setattr(main, "sync_autostart", lambda: None)
+    monkeypatch.setattr(main, "set_shutdown_callback", lambda callback: None)
+    monkeypatch.setattr(main, "wait_for_server", lambda server, thread: True)
+    monkeypatch.setattr(main.uvicorn, "Server", FakeServer)
+    monkeypatch.setattr(main, "start_ytdlp_updates", lambda: None)
+
+
+def test_a_file_goes_to_the_running_bridge(monkeypatch, calls):
+    handed = []
+    monkeypatch.setattr(main, "probe_port", lambda host, port: "bridge")
+    monkeypatch.setattr(main, "hand_over_file", lambda port, path: handed.append((port, path)) or (True, None))
+    assert main.main(["--port", "9899", "clip.funscript"]) == 0
+    assert handed == [(9899, "clip.funscript")]
+    assert calls["editor"] == 0
+
+
+def test_a_failed_hand_over_says_why(monkeypatch, calls):
+    monkeypatch.setattr(main, "probe_port", lambda host, port: "bridge")
+    monkeypatch.setattr(main, "hand_over_file", lambda port, path: (False, "The file was not found."))
+    assert main.main(["--port", "9899", "clip.funscript"]) == 1
+    assert "The file was not found." in calls["errors"][0]
+
+
+def test_a_new_bridge_opens_the_file_once_it_runs(monkeypatch, calls, fresh_start):
+    opened = []
+    monkeypatch.setattr(main, "open_in_editor", opened.append)
+    assert main.main(["--no-tray", "--port", "9899", "clip.funscript"]) == 0
+    assert opened == [os.path.abspath("clip.funscript")]
+    assert calls["editor"] == 0
+    assert calls["marked"] == 1
+
+
+def test_a_new_bridge_says_why_a_file_cannot_open(monkeypatch, calls, fresh_start):
+    def refuse(path):
+        raise main.OpenError("Only .funscript files can be opened.")
+
+    monkeypatch.setattr(main, "open_in_editor", refuse)
+    assert main.main(["--no-tray", "--port", "9899", "notes.txt"]) == 0
+    assert "Only .funscript files can be opened." in calls["errors"][0]

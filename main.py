@@ -19,8 +19,10 @@ from bridge.logs import log_dir, setup_logging
 from bridge.request_guard import allow_bind_host
 from bridge.server import set_shutdown_callback
 from bridge.settings import sync_autostart
+from bridge.open_files import OpenError, open_in_editor
 from bridge.startup import (
-    is_first_run, mark_first_run_done, probe_port, startup_actions, wait_for_port_free, wait_for_server,
+    hand_over_file, is_first_run, mark_first_run_done, probe_port, startup_actions, wait_for_port_free,
+    wait_for_server,
 )
 from bridge.updater import cleanup_old_mac_app
 from bridge.ytdlp_utils import start_ytdlp_updates
@@ -42,6 +44,7 @@ def parse_args(argv=None):
     parser.add_argument("--no-tray", action="store_true", help="Disable system tray icon")
     parser.add_argument("--autostart", action="store_true", help="Started at login, start quietly")
     parser.add_argument("--updated", action="store_true", help="Started by the installer after an update")
+    parser.add_argument("file", nargs="?", help="A .funscript file to open in the editor")
     return parser.parse_args(argv)
 
 
@@ -59,6 +62,13 @@ def running_message():
     if _is_linux():
         return "ScriptCompiler Bridge is running in the background."
     return "ScriptCompiler Bridge is running. You can find it in the system tray."
+
+
+def open_file(path):
+    try:
+        open_in_editor(os.path.abspath(path))
+    except OpenError as e:
+        show_error(f"Could not open {os.path.basename(path)}. {e}")
 
 
 def announce(actions):
@@ -86,6 +96,12 @@ def main(argv=None):
 
     state = probe_port(args.host, args.port)
     if state == "bridge":
+        if args.file:
+            ok, error = hand_over_file(args.port, args.file)
+            if not ok:
+                show_error(f"Could not open {os.path.basename(args.file)}. {error}")
+                return 1
+            return 0
         logger.info("The bridge is already running, opening the editor")
         open_editor()
         return 0
@@ -96,7 +112,12 @@ def main(argv=None):
     if _is_linux() and os.environ.get("APPIMAGE"):
         install_menu_entry(os.environ["APPIMAGE"], os.environ.get("APPDIR"))
 
-    actions = startup_actions(args.autostart, args.updated, is_first_run())
+    first_run = is_first_run()
+    actions = startup_actions(args.autostart, args.updated, first_run)
+    if args.file:
+        actions = [action for action in actions if action != "open_editor"]
+        if first_run:
+            mark_first_run_done()
     sync_autostart()
 
     server_config = uvicorn.Config(
@@ -126,6 +147,8 @@ def main(argv=None):
         return 1
 
     start_ytdlp_updates()
+    if args.file:
+        open_file(args.file)
 
     if not use_tray(args):
         announce(actions)

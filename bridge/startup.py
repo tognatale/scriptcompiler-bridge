@@ -3,7 +3,8 @@ import logging
 import os
 import socket
 import time
-from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from . import settings
 from .config import BRIDGE_NAME
@@ -57,6 +58,24 @@ def wait_for_server(server, thread, timeout=30.0, poll=0.1):
             return False
         time.sleep(poll)
     return bool(server.started)
+
+
+def hand_over_file(port, path):
+    body = json.dumps({"path": os.path.abspath(path)}).encode("utf-8")
+    request = Request(f"http://127.0.0.1:{port}/open", data=body, method="POST",
+                      headers={"Content-Type": "application/json"})
+    try:
+        with urlopen(request, timeout=10):
+            return True, None
+    except HTTPError as e:
+        if e.code == 404:
+            return False, "The running ScriptCompiler Bridge is too old to open files. Quit it, then open the file again."
+        try:
+            return False, json.loads(e.read().decode("utf-8")).get("error") or str(e)
+        except (ValueError, OSError):
+            return False, str(e)
+    except (URLError, OSError) as e:
+        return False, f"Could not reach the running ScriptCompiler Bridge: {e}"
 
 
 def wait_for_port_free(host, port, timeout=20.0, poll=0.25):

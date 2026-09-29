@@ -111,3 +111,58 @@ def test_wait_for_port_free_returns_once_the_port_is_free(monkeypatch):
 def test_wait_for_port_free_gives_up(monkeypatch):
     monkeypatch.setattr(startup, "probe_port", lambda host, port, timeout=1.0: "bridge")
     assert startup.wait_for_port_free("127.0.0.1", 9876, timeout=0.1, poll=0.02) is False
+
+
+def _open_server(status, reply):
+    received = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers["Content-Length"])
+            received.append((self.path, json.loads(self.rfile.read(length)), self.headers.get("Origin")))
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(reply).encode())
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, received
+
+
+def test_hand_over_sends_the_file_to_the_running_bridge(tmp_path):
+    server, received = _open_server(200, {"success": True})
+    try:
+        path = str(tmp_path / "clip.funscript")
+        assert startup.hand_over_file(server.server_port, path) == (True, None)
+        assert received == [("/open", {"path": path}, None)]
+    finally:
+        server.shutdown()
+
+
+def test_hand_over_passes_on_the_bridge_error(tmp_path):
+    server, _ = _open_server(400, {"success": False, "error": "Only .funscript files can be opened."})
+    try:
+        result = startup.hand_over_file(server.server_port, str(tmp_path / "notes.txt"))
+        assert result == (False, "Only .funscript files can be opened.")
+    finally:
+        server.shutdown()
+
+
+def test_hand_over_to_nothing_fails_cleanly(tmp_path):
+    ok, error = startup.hand_over_file(_free_port(), str(tmp_path / "clip.funscript"))
+    assert ok is False
+    assert error
+
+
+def test_hand_over_to_an_old_bridge_says_to_quit_it(tmp_path):
+    server, _ = _open_server(404, {"detail": "Not Found"})
+    try:
+        ok, error = startup.hand_over_file(server.server_port, str(tmp_path / "clip.funscript"))
+        assert ok is False
+        assert "too old" in error
+    finally:
+        server.shutdown()
