@@ -42,8 +42,17 @@ jobs:
             Remove-Item -Force 'ffmpeg\ffmpeg.zip'
           }
 
+      - name: Download yt-dlp (Windows)
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile 'yt-dlp\yt-dlp.exe'
+
       - name: Build with PyInstaller
         run: pyinstaller bridge.spec --noconfirm
+
+      - name: Smoke test the build
+        run: python packaging/smoke_test.py --bundle dist/ScriptCompilerBridge -- dist/ScriptCompilerBridge/ScriptCompilerBridge.exe --no-tray
 
       - name: Extract version
         id: version
@@ -99,6 +108,9 @@ jobs:
 
       - name: Build with PyInstaller
         run: pyinstaller bridge.spec --noconfirm
+
+      - name: Smoke test the build
+        run: python packaging/smoke_test.py --bundle dist/ScriptCompilerBridge.app -- dist/ScriptCompilerBridge.app/Contents/MacOS/ScriptCompilerBridge --no-tray
 
       - name: Extract version
         id: version
@@ -167,6 +179,11 @@ jobs:
 
       - name: Build AppImage
         run: bash packaging/linux/build-appimage.sh "${{ steps.version.outputs.version }}"
+
+      - name: Smoke test the AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: python packaging/smoke_test.py --bundle dist/ScriptCompilerBridge -- "dist/ScriptCompilerBridge-${{ steps.version.outputs.version }}-x86_64.AppImage"
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
