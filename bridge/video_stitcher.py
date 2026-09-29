@@ -238,7 +238,7 @@ def get_stitch_progress():
 def start_stitch_background(video_path, clips, output_path):
     """Start stitching in background with progress tracking. Returns the future.
     Must be called from within a running event loop."""
-    from .config import EXECUTOR
+    from .config import HEAVY_EXECUTOR
 
     _stitch_progress["stage"] = "preparing"
     _stitch_progress["percent"] = 0
@@ -255,4 +255,4 @@ def start_stitch_background(video_path, clips, output_path):
         _stitch_progress["active"] = False
         return result
 
-    return loop.run_in_executor(EXECUTOR, _run)
+    return loop.run_in_executor(HEAVY_EXECUTOR, _run)

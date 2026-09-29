@@ -6,7 +6,7 @@ import logging
 import time as _time
 from pathlib import Path
 
-from .config import SETTINGS_DIR_NAME, EXECUTOR
+from .config import SETTINGS_DIR_NAME, HEAVY_EXECUTOR
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +258,7 @@ async def pregenerate_with_progress(video_path, times_ms):
     progress_state = {"cached": 0, "total": len(times_ms), "done": False}
 
     future = loop.run_in_executor(
-        EXECUTOR, pregenerate_frames, video_path, times_ms, progress_state, _cancel_event
+        HEAVY_EXECUTOR, pregenerate_frames, video_path, times_ms, progress_state, _cancel_event
     )
 
     last_percent = -1

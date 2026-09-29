@@ -22,6 +22,7 @@ AUDIO_ANALYSIS_TIMEOUT = 120.0
 SETTINGS_DIR_NAME = ".scriptcompiler-bridge"
 SETTINGS_FILE_NAME = "settings.json"
 
-# Shared executor for blocking I/O (file dialogs, scene detection, etc.)
-EXECUTOR = ThreadPoolExecutor(max_workers=2)
+EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="quick")
+HEAVY_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="heavy")
+DIALOG_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="dialog")
 

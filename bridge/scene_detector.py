@@ -2,7 +2,7 @@ import asyncio
 import logging
 import threading
 
-from .config import EXECUTOR
+from .config import HEAVY_EXECUTOR
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ async def detect_scenes(video_path, threshold=30.0):
         return {"success": False, "error": "No video path provided"}
 
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(EXECUTOR, _detect_scenes_sync, video_path, threshold, 0, 0, None)
+    return await loop.run_in_executor(HEAVY_EXECUTOR, _detect_scenes_sync, video_path, threshold, 0, 0, None)
 
 
 async def detect_scenes_with_progress(video_path, threshold=30.0, downscale=0, frame_skip=0):
@@ -162,7 +162,7 @@ async def detect_scenes_with_progress(video_path, threshold=30.0, downscale=0, f
 
     # Start detection in background thread
     future = loop.run_in_executor(
-        EXECUTOR, _detect_scenes_sync, video_path, threshold, downscale, frame_skip, progress_state
+        HEAVY_EXECUTOR, _detect_scenes_sync, video_path, threshold, downscale, frame_skip, progress_state
     )
 
     last_percent = -1

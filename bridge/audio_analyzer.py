@@ -6,7 +6,7 @@ import threading
 
 import numpy as np
 
-from .config import EXECUTOR
+from .config import HEAVY_EXECUTOR
 
 logger = logging.getLogger(__name__)
 
@@ -359,7 +359,7 @@ async def analyze_audio_with_progress(video_path, options=None):
     progress_state = {"stage": "init", "percent": 0, "done": False}
 
     future = loop.run_in_executor(
-        EXECUTOR, _analyze_audio_sync, video_path, options, progress_state
+        HEAVY_EXECUTOR, _analyze_audio_sync, video_path, options, progress_state
     )
 
     last_percent = -1

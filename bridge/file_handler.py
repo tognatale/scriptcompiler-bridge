@@ -3,7 +3,7 @@ import os
 import logging
 import sys
 
-from .config import VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, FUNSCRIPT_EXTENSIONS, EXECUTOR
+from .config import VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, FUNSCRIPT_EXTENSIONS, DIALOG_EXECUTOR
 from .pickers import PickerUnavailable, pick_file, pick_save_file
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ def _save_file(title, filetypes, default_name, extensions, label):
 
 async def _run_dialog(func, *args):
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(EXECUTOR, func, *args)
+    return await loop.run_in_executor(DIALOG_EXECUTOR, func, *args)
 
 
 async def open_video_dialog():

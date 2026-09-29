@@ -12,7 +12,7 @@ from typing import Optional
 
 from urllib.parse import quote as url_encode
 
-from .config import BRIDGE_VERSION, BRIDGE_NAME, CORS_ALLOW_ORIGIN_REGEX, DEFAULT_PORT, EXECUTOR, FUNSCRIPT_EXTENSIONS
+from .config import BRIDGE_VERSION, BRIDGE_NAME, CORS_ALLOW_ORIGIN_REGEX, DEFAULT_PORT, DIALOG_EXECUTOR, EXECUTOR, FUNSCRIPT_EXTENSIONS
 from .request_guard import RequestGuard
 from .tracker_bridge import TrackerBridge
 from .file_handler import open_video_dialog, open_audio_dialog, open_funscript_dialog, save_funscript_dialog, write_funscript, is_dialog_allowed_path
@@ -121,7 +121,7 @@ async def capabilities():
 async def pick_folder_endpoint():
     loop = asyncio.get_running_loop()
     try:
-        folder = await loop.run_in_executor(EXECUTOR, pick_folder)
+        folder = await loop.run_in_executor(DIALOG_EXECUTOR, pick_folder)
     except PickerUnavailable as e:
         return JSONResponse(status_code=400, content={"error": str(e), "folders": get_video_folders()})
     if not folder:
