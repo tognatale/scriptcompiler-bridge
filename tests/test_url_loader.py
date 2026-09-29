@@ -35,6 +35,52 @@ def test_downloads_into_a_drive_root_folder(ytdlp, tmp_path):
     assert result == os.path.realpath(target)
 
 
+def test_a_filename_error_shows_the_yt_dlp_error(ytdlp, tmp_path):
+    ytdlp(FakeYtdlp(stderr=b"WARNING: slow site\nERROR: Unsupported URL: https://x\n", returncode=1))
+    with pytest.raises(ValueError, match="^Unsupported URL: https://x$"):
+        asyncio.run(url_loader.get_output_filename("https://x", str(tmp_path)))
+
+
+class FakeStream:
+    def __init__(self, lines):
+        self.lines = lines
+
+    def __aiter__(self):
+        return self._iterate()
+
+    async def _iterate(self):
+        for line in self.lines:
+            yield line
+
+
+class FakeDownload:
+    def __init__(self, lines, returncode):
+        self.stdout = FakeStream(lines)
+        self.returncode = returncode
+
+    async def wait(self):
+        return self.returncode
+
+
+def test_a_failed_download_says_why(tmp_path):
+    sent = []
+
+    async def broadcast(message):
+        sent.append(message)
+
+    proc = FakeDownload([
+        b"[generic] Extracting URL: https://x\n",
+        b"WARNING: [generic] Falling back on generic information extractor\n",
+        b"ERROR: [generic] Unable to download webpage: HTTP Error 404: Not Found\n",
+    ], returncode=1)
+    asyncio.run(url_loader._monitor_progress("abc", proc, str(tmp_path / "x.mp4"), broadcast))
+    assert sent == [{
+        "type": "download_error",
+        "download_id": "abc",
+        "message": "Download failed: [generic] Unable to download webpage: HTTP Error 404: Not Found",
+    }]
+
+
 class FakeProc:
     pid = 4321
 

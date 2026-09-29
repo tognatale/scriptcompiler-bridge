@@ -59,6 +59,14 @@ def _get_quality():
     )
 
 
+def _yt_dlp_error(output, fallback):
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    errors = [line[len("ERROR:"):].strip() for line in lines if line.startswith("ERROR:")]
+    if errors:
+        return errors[-1]
+    return lines[-1] if lines else fallback
+
+
 def _impersonate_args():
     target = get_settings().get("yt_dlp_impersonate", "chrome")
     if not target:
@@ -93,8 +101,7 @@ async def get_output_filename(url: str, output_folder: str, output_template: str
     stdout, stderr = await proc.communicate()
 
     if proc.returncode != 0:
-        error_msg = stderr.decode("utf-8", errors="replace").strip()
-        raise ValueError(f"yt-dlp error: {error_msg}")
+        raise ValueError(_yt_dlp_error(stderr.decode("utf-8", errors="replace"), "yt-dlp returned an error"))
 
     lines = stdout.decode("utf-8", errors="replace").strip().splitlines()
     if not lines or not lines[0]:
@@ -135,9 +142,7 @@ async def fetch_video_info(url: str) -> dict:
         raise ValueError("Timed out fetching video info (30s)")
 
     if proc.returncode != 0:
-        error_msg = stderr.decode("utf-8", errors="replace").strip()
-        lines = [l for l in error_msg.splitlines() if l.strip()]
-        raise ValueError(lines[-1] if lines else "yt-dlp returned an error")
+        raise ValueError(_yt_dlp_error(stderr.decode("utf-8", errors="replace"), "yt-dlp returned an error"))
 
     raw = stdout.decode("utf-8", errors="replace").strip()
     if not raw:
@@ -232,9 +237,12 @@ async def start_download(url: str, websocket_broadcast, video_info=None) -> tupl
 
 async def _monitor_progress(download_id: str, proc, file_path: str, broadcast):
     """Read yt-dlp stdout and broadcast progress events."""
+    last_error = None
     try:
         async for line_bytes in proc.stdout:
             line = line_bytes.decode("utf-8", errors="replace").strip()
+            if line.startswith("ERROR:"):
+                last_error = line[len("ERROR:"):].strip()
             m = _PROGRESS_RE.search(line)
             if m:
                 await broadcast({
@@ -271,7 +279,7 @@ async def _monitor_progress(download_id: str, proc, file_path: str, broadcast):
         await broadcast({
             "type": "download_error",
             "download_id": download_id,
-            "message": "Download failed",
+            "message": f"Download failed: {last_error}" if last_error else "Download failed",
         })
 
 
