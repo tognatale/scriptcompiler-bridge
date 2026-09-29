@@ -10,14 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 class TrackerBridge:
-    """Manages the tracker.py subprocess. Mirrors Electron's tracking-manager.js."""
-
     def __init__(self):
         self._process = None
         self._is_ready = False
         self._startup_info = None
         self._request_id = 0
-        self._pending = {}  # request_id -> asyncio.Future
+        self._pending = {}
         self._read_task = None
         self._buffer = ""
 
@@ -32,7 +30,6 @@ class TrackerBridge:
         await self.cleanup()
 
         if getattr(sys, 'frozen', False):
-            # PyInstaller bundle: tracker binary is next to main executable
             exe_dir = os.path.dirname(sys.executable)
             if sys.platform == "win32":
                 tracker_exe = os.path.join(exe_dir, "tracker.exe")
@@ -55,7 +52,7 @@ class TrackerBridge:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                creationflags=0x08000000 if sys.platform == "win32" else 0,  # CREATE_NO_WINDOW
+                creationflags=0x08000000 if sys.platform == "win32" else 0,
             )
         except Exception as e:
             logger.error("Failed to spawn tracker subprocess: %s", e)
@@ -64,7 +61,6 @@ class TrackerBridge:
         self._read_task = asyncio.create_task(self._read_stdout())
         asyncio.create_task(self._read_stderr())
 
-        # Wait for startup message
         try:
             startup = await asyncio.wait_for(self._wait_for_startup(), timeout=10.0)
             if not startup.get("success"):
@@ -74,7 +70,6 @@ class TrackerBridge:
             await self.cleanup()
             return {"success": False, "error": "Tracker startup timeout (10s)"}
 
-        # Send ping to verify
         try:
             ping_result = await self.send_command({"command": "ping"}, timeout=5.0)
             if ping_result.get("pong"):
@@ -90,13 +85,11 @@ class TrackerBridge:
             return {"success": False, "error": f"Ping failed: {e}"}
 
     async def _wait_for_startup(self):
-        """Wait for the startup message (no request ID)."""
         future = asyncio.get_event_loop().create_future()
         self._pending["__startup__"] = future
         return await future
 
     async def _read_stdout(self):
-        """Continuously read JSON lines from the subprocess stdout."""
         try:
             while self._process and self._process.stdout:
                 line_bytes = await self._process.stdout.readline()
@@ -122,7 +115,6 @@ class TrackerBridge:
             self._pending.clear()
 
     async def _read_stderr(self):
-        """Log stderr from tracker subprocess."""
         try:
             while self._process and self._process.stderr:
                 line_bytes = await self._process.stderr.readline()
@@ -135,8 +127,6 @@ class TrackerBridge:
             pass
 
     def _dispatch_response(self, response):
-        """Route a parsed JSON response to the right pending future."""
-        # Startup message (no request ID)
         if response.get("command") == "startup" and "__startup__" in self._pending:
             future = self._pending.pop("__startup__")
             if not future.done():
@@ -149,7 +139,6 @@ class TrackerBridge:
                 future.set_result(response)
             return
 
-        # Regular response with request ID
         rid = response.get("_requestId")
         if rid is not None and rid in self._pending:
             future = self._pending.pop(rid)
@@ -158,7 +147,6 @@ class TrackerBridge:
                 future.set_result(response)
 
     async def send_command(self, command, timeout=None):
-        """Send a JSON command to tracker.py and wait for the response."""
         if not self._process or not self._process.stdin:
             raise RuntimeError("Tracker process not running")
 

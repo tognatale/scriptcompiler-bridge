@@ -14,10 +14,8 @@ from .video_library import is_inside, scan_and_cache as _scan_and_cache
 
 logger = logging.getLogger(__name__)
 
-# Active downloads: download_id -> {process, file_path, url}
 _active_downloads = {}
 
-# Map url -> download_id for deduplication
 _url_to_download_id = {}
 
 _PROGRESS_RE = re.compile(
@@ -26,7 +24,6 @@ _PROGRESS_RE = re.compile(
 
 
 def _cleanup_partial_file(file_path):
-    """Remove a partially-downloaded file and its .part counterpart."""
     for path in (file_path, file_path + ".part"):
         try:
             if os.path.isfile(path):
@@ -75,7 +72,6 @@ def _impersonate_args():
 
 
 async def get_output_filename(url: str, output_folder: str, output_template: str = None) -> str:
-    """Ask yt-dlp what the output filename will be without downloading."""
     ytdlp = get_ytdlp_path()
     if ytdlp is None:
         raise ValueError("yt-dlp binary not found. Please reinstall the bridge.")
@@ -108,7 +104,6 @@ async def get_output_filename(url: str, output_folder: str, output_template: str
         raise ValueError("yt-dlp returned no filename")
     filename = os.path.realpath(lines[0])
 
-    # Ensure the resolved path stays within the output folder
     if not is_inside(filename, os.path.realpath(output_folder)):
         raise ValueError("Output path escaped the video folder")
 
@@ -180,13 +175,6 @@ def _process_group_kwargs():
 
 
 async def start_download(url: str, websocket_broadcast, video_info=None) -> tuple:
-    """
-    Start downloading url. Returns (download_id, file_path).
-    Responds immediately; download continues in background.
-    websocket_broadcast: async callable(dict) to send progress events.
-    video_info: optional dict with title, thumbnail, uploader, duration, cast, tags.
-    """
-    # Dedup: return existing download for same URL
     if url in _url_to_download_id:
         existing_id = _url_to_download_id[url]
         if existing_id in _active_downloads:
@@ -207,8 +195,6 @@ async def start_download(url: str, websocket_broadcast, video_info=None) -> tupl
         raise ValueError("yt-dlp binary not found. Please reinstall the bridge.")
     quality = _get_quality()
 
-    # Start a new process group so cancel can kill the entire tree
-    # (yt-dlp may spawn ffmpeg child processes that outlive the parent)
     kwargs = _process_group_kwargs()
 
     proc = await asyncio.create_subprocess_exec(
@@ -236,7 +222,6 @@ async def start_download(url: str, websocket_broadcast, video_info=None) -> tupl
 
 
 async def _monitor_progress(download_id: str, proc, file_path: str, broadcast):
-    """Read yt-dlp stdout and broadcast progress events."""
     last_error = None
     try:
         async for line_bytes in proc.stdout:
@@ -284,7 +269,6 @@ async def _monitor_progress(download_id: str, proc, file_path: str, broadcast):
 
 
 def get_active_downloads() -> list:
-    """Return list of currently active downloads."""
     result = []
     for did, entry in _active_downloads.items():
         if entry.get("cancelled"):
@@ -299,7 +283,6 @@ def get_active_downloads() -> list:
 
 
 def cancel_download(download_id: str) -> bool:
-    """Kill the yt-dlp process for a given download_id. Returns True if found."""
     entry = _active_downloads.get(download_id)
     if not entry:
         return False
@@ -308,7 +291,6 @@ def cancel_download(download_id: str) -> bool:
     proc = entry["process"]
     try:
         if sys.platform == "win32":
-            # Kill the entire process tree on Windows (yt-dlp + ffmpeg children)
             subprocess.call(
                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                 stdout=subprocess.DEVNULL,

@@ -4,7 +4,6 @@ import os
 import sys
 import threading
 
-# PyInstaller console=False sets sys.stdout/stderr to None which breaks uvicorn logging
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
 if sys.stderr is None:
@@ -29,7 +28,6 @@ from bridge.ytdlp_utils import start_ytdlp_updates
 
 logger = logging.getLogger(__name__)
 
-# Suppress harmless ConnectionResetError from asyncio (browser cancels video range requests on seek)
 class _ConnectionResetFilter(logging.Filter):
     def filter(self, record):
         return "ConnectionResetError" not in record.getMessage()

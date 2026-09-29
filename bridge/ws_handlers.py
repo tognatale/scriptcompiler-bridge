@@ -68,13 +68,11 @@ async def handle_cleanup(tracker, msg):
 
 
 def _is_allowed_path(path):
-    """Check if a path is in video folders or was returned by a file dialog."""
     folders = get_video_folders()
     return is_path_in_allowed_folders(path, folders) or can_read(path)
 
 
 async def handle_detect_scenes(websocket, msg, command, request_id):
-    """Start scene detection as a background task. Returns None to signal no immediate response."""
     logger.info("WS command: detect_scenes (with progress)")
 
     vpath = msg.get("videoPath")
@@ -106,7 +104,7 @@ async def handle_detect_scenes(websocket, msg, command, request_id):
             msg.get("frameSkip", 0),
         )
     )
-    return task  # caller stores ref for cleanup on disconnect
+    return task
 
 
 async def handle_cancel_scene_detection(msg):
@@ -116,7 +114,6 @@ async def handle_cancel_scene_detection(msg):
 
 
 async def handle_analyze_audio(websocket, msg, command, request_id):
-    """Start audio analysis as a background task. Returns task ref for cleanup."""
     logger.info("WS command: analyze_audio (with progress)")
 
     vpath = msg.get("videoPath") or msg.get("audioPath")
@@ -154,7 +151,6 @@ async def handle_cancel_audio_analysis(msg):
 
 
 async def handle_pregenerate_thumbnails(websocket, msg, command, request_id):
-    """Start thumbnail pregeneration as a background task. Returns task ref for cleanup."""
     logger.info("WS command: pregenerate_thumbnails")
 
     vpath = msg.get("videoPath")
@@ -201,8 +197,6 @@ async def handle_cancel_download(msg):
     return {"success": ok}
 
 
-# Command -> handler mapping
-# Handlers that need (tracker, msg, frame_bytes) get those args from the dispatch loop.
 HANDLERS = {
     "initialize": handle_initialize,
     "start_tracking": handle_start_tracking,

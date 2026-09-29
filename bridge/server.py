@@ -69,12 +69,10 @@ def _schedule_shutdown():
     asyncio.get_running_loop().call_later(0.3, _shutdown_server)
 
 
-# Active WebSocket connections for broadcasting download progress
 _ws_connections: list = []
 
 
 async def _broadcast_to_ws(message: dict):
-    """Send a message to all connected WebSocket clients."""
     for ws in list(_ws_connections):
         try:
             await ws.send_json(message)
@@ -90,8 +88,6 @@ def notify_capabilities_changed():
     if _loop is not None and _loop.is_running():
         asyncio.run_coroutine_threadsafe(broadcast_capabilities_changed(), _loop)
 
-
-# --- HTTP Endpoints ---
 
 @app.get("/health")
 async def health():
@@ -190,7 +186,6 @@ async def open_audio():
 
 @app.get("/files/stream")
 async def stream_file(path: str):
-    """Stream a file from disk. Used to load audio into the browser for playback."""
     folders = get_video_folders()
     if not is_path_in_allowed_folders(path, folders) and not can_read(path):
         return JSONResponse(status_code=403, content={"error": "Access denied"})
@@ -260,8 +255,6 @@ async def claim_file_endpoint(req: ClaimRequest):
         return JSONResponse(status_code=404, content={"error": str(e)})
 
 
-# --- Updates ---
-
 @app.get("/update/check")
 async def check_update():
     loop = asyncio.get_event_loop()
@@ -278,8 +271,6 @@ async def apply_update():
 async def update_status():
     return JSONResponse(content=get_update_status())
 
-
-# --- Video Library ---
 
 @app.get("/videos/list")
 async def list_videos():
@@ -415,7 +406,6 @@ async def stitch_videos_endpoint(req: StitchRequest):
     if progress.get("active"):
         return JSONResponse(status_code=409, content={"error": "Stitching already in progress"})
 
-    # Determine output directory: first video folder or temp
     if folders:
         output_dir = folders[0]
     else:
@@ -435,7 +425,6 @@ async def stitch_progress_endpoint():
     global _stitch_future
     progress = get_stitch_progress()
 
-    # If done, include the final result from progress_state
     if progress.get("done"):
         result = progress.get("result")
         _stitch_future = None
@@ -544,17 +533,14 @@ async def get_video_frames_batch(req: BatchFramesRequest):
 
     loop = asyncio.get_event_loop()
 
-    # Check disk cache first
     cached = await loop.run_in_executor(
         EXECUTOR, thumbnail_cache.get_cached_frames_batch, req.path, times
     )
 
-    # Extract only uncached frames via OpenCV
     uncached_times = [t for t in times if t not in cached]
     if uncached_times:
         extracted = await loop.run_in_executor(EXECUTOR, generate_frames_batch, req.path, uncached_times)
         if extracted:
-            # Save newly extracted frames to disk cache in background
             loop.run_in_executor(EXECUTOR, thumbnail_cache.save_frames_batch, req.path, extracted)
             cached.update(extracted)
 
@@ -591,10 +577,7 @@ async def get_video_funscript(path: str):
         return JSONResponse(content={"found": False, "error": str(e)})
 
 
-# --- WebSocket Tracking ---
-
 def _parse_ws_message(ws_msg):
-    """Parse a raw WebSocket message into (msg_dict, frame_bytes) or raise ValueError."""
     if "text" in ws_msg and ws_msg["text"]:
         return json.loads(ws_msg["text"]), None
 
@@ -654,8 +637,8 @@ async def tracking_ws(websocket: WebSocket):
                     result = await handler(tracker, msg, frame_bytes)
                 elif command == "detect_scenes":
                     result = await handler(websocket, msg, command, request_id)
-                    scene_detect_task = result  # store task ref for cleanup
-                    result = None  # handler manages its own responses
+                    scene_detect_task = result
+                    result = None
                 elif command == "analyze_audio":
                     result = await handler(websocket, msg, command, request_id)
                     audio_analyze_task = result
@@ -676,7 +659,7 @@ async def tracking_ws(websocket: WebSocket):
                     result = await handler(tracker, msg)
 
                 if result is None:
-                    continue  # handler manages its own responses (e.g. detect_scenes)
+                    continue
 
                 result["command"] = command
                 if request_id is not None:
@@ -701,17 +684,14 @@ async def tracking_ws(websocket: WebSocket):
     finally:
         if websocket in _ws_connections:
             _ws_connections.remove(websocket)
-        # Cancel any running scene detection
         if scene_detect_task is not None:
             cancel_detection()
             scene_detect_task.cancel()
             logger.info("Cancelled scene detection due to WebSocket disconnect")
-        # Cancel any running audio analysis
         if audio_analyze_task is not None:
             cancel_audio_analysis()
             audio_analyze_task.cancel()
             logger.info("Cancelled audio analysis due to WebSocket disconnect")
-        # Cancel any running thumbnail pregeneration
         if thumbnail_pregen_task is not None:
             cancel_pregeneration()
             thumbnail_pregen_task.cancel()
@@ -722,8 +702,6 @@ async def tracking_ws(websocket: WebSocket):
             except Exception:
                 pass
 
-
-# --- Lifecycle ---
 
 @app.on_event("startup")
 async def startup_event():
@@ -738,7 +716,6 @@ async def startup_event():
 
     _loop.run_in_executor(EXECUTOR, check_for_update)
     _loop.run_in_executor(EXECUTOR, thumbnail_cache.cleanup_old_caches)
-
 
 
 @app.on_event("shutdown")

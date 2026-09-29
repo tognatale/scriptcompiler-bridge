@@ -1,7 +1,3 @@
-# PyInstaller spec for ScriptCompiler Bridge
-# Builds two executables: main bridge app + tracker subprocess
-# Usage: pyinstaller bridge.spec
-
 import sys
 import os
 
@@ -11,7 +7,6 @@ is_linux = sys.platform.startswith('linux')
 is_windows = sys.platform == 'win32'
 exe_suffix = '.exe' if is_windows else ''
 
-# Locate ffmpeg binary to bundle
 _ffmpeg_binaries = []
 _ffmpeg_name = 'ffmpeg' + exe_suffix
 _ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(SPEC)), 'ffmpeg', _ffmpeg_name)
@@ -21,7 +16,6 @@ if os.path.isfile(_ffmpeg_path):
 else:
     print(f"WARNING: ffmpeg not found at {_ffmpeg_path} - audio analysis may not work")
 
-# Locate yt-dlp binary to bundle
 _ytdlp_binaries = []
 _ytdlp_name = 'yt-dlp' + exe_suffix
 _ytdlp_path = os.path.join(os.path.dirname(os.path.abspath(SPEC)), 'yt-dlp', _ytdlp_name)
@@ -31,7 +25,6 @@ if os.path.isfile(_ytdlp_path):
 else:
     print(f"WARNING: yt-dlp not found at {_ytdlp_path}")
 
-# Packages installed globally but NOT needed by the bridge
 _global_excludes = [
     'torch', 'torchaudio', 'torchvision', 'pytorch_lightning', 'torchmetrics',
     'tensorflow', 'keras', 'tensorboard',
@@ -51,7 +44,6 @@ _global_excludes = [
     'setuptools', 'pip', 'wheel',
 ]
 
-# --- Tracker subprocess (headless, no console window) ---
 tracker_a = Analysis(
     ['tracker.py'],
     pathex=[],
@@ -82,7 +74,6 @@ tracker_exe = EXE(
     icon=None,
 )
 
-# --- Main bridge app ---
 bridge_hidden = [
     'uvicorn.logging',
     'uvicorn.loops',
@@ -95,7 +86,6 @@ bridge_hidden = [
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
     'PIL.Image',
-    # librosa + audio analysis dependencies
     'librosa',
     'librosa.core',
     'librosa.beat',
@@ -150,7 +140,6 @@ bridge_exe = EXE(
     version_info=None,
 )
 
-# --- Merge into single output folder ---
 coll = COLLECT(
     bridge_exe,
     bridge_a.binaries,
@@ -166,7 +155,6 @@ coll = COLLECT(
     name='ScriptCompilerBridge',
 )
 
-# On macOS, also create a .app bundle
 if is_mac:
     app = BUNDLE(
         coll,
@@ -174,6 +162,6 @@ if is_mac:
         icon=None,
         bundle_identifier='com.scriptcompiler.bridge',
         info_plist={
-            'LSUIElement': True,  # Hide from Dock (menu bar app)
+            'LSUIElement': True,
         },
     )

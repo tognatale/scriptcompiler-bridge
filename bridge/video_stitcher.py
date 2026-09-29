@@ -17,7 +17,6 @@ def cancel_stitching():
 
 
 def _get_ffmpeg_path():
-    """Return path to ffmpeg, checking bundled location first."""
     if getattr(sys, 'frozen', False):
         bundle_dir = sys._MEIPASS
     else:
@@ -29,19 +28,10 @@ def _get_ffmpeg_path():
 
     if os.path.isfile(ffmpeg_path):
         return ffmpeg_path
-    return 'ffmpeg'  # Fall back to PATH
+    return 'ffmpeg'
 
 
 def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
-    """
-    Extract clips from a single video and concatenate them using FFmpeg.
-
-    Args:
-        video_path: Path to source video file
-        clips: List of dicts with 'start' and 'end' in seconds
-        output_path: Full path for output video file
-        progress_state: Optional dict for progress reporting
-    """
     _cancel_event.clear()
 
     if progress_state is not None:
@@ -62,7 +52,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
         try:
             total_clips = len(clips)
 
-            # Step 1: Extract each clip segment
             for i, clip in enumerate(clips):
                 if _cancel_event.is_set():
                     return {"success": False, "cancelled": True}
@@ -100,7 +89,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
 
                 if proc.returncode != 0:
                     error_msg = stderr.decode('utf-8', errors='replace').strip()
-                    # If stream copy fails, retry with re-encoding
                     cmd_reencode = [
                         ffmpeg,
                         '-y',
@@ -134,7 +122,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
             if _cancel_event.is_set():
                 return {"success": False, "cancelled": True}
 
-            # Step 2: Create concat file
             concat_file = os.path.join(temp_dir, "concat.txt")
             with open(concat_file, 'w') as f:
                 for seg in segment_files:
@@ -145,7 +132,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
                 progress_state["stage"] = "concatenating"
                 progress_state["percent"] = 75
 
-            # Step 3: Concatenate
             cmd_concat = [
                 ffmpeg,
                 '-y',
@@ -171,7 +157,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
 
             if proc.returncode != 0:
                 error_msg = stderr.decode('utf-8', errors='replace').strip()
-                # Retry with re-encoding if concat fails
                 cmd_concat_reencode = [
                     ffmpeg,
                     '-y',
@@ -202,7 +187,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
                 progress_state["percent"] = 100
                 progress_state["done"] = True
 
-            # Calculate total duration
             total_duration = sum(c["end"] - c["start"] for c in clips)
 
             return {
@@ -213,7 +197,6 @@ def _stitch_videos_sync(video_path, clips, output_path, progress_state=None):
             }
 
         finally:
-            # Clean up temp segments
             import shutil
             try:
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -231,13 +214,10 @@ _stitch_progress = {"stage": "idle", "percent": 0, "done": False, "active": Fals
 
 
 def get_stitch_progress():
-    """Return a snapshot of current stitch progress."""
     return dict(_stitch_progress)
 
 
 def start_stitch_background(video_path, clips, output_path):
-    """Start stitching in background with progress tracking. Returns the future.
-    Must be called from within a running event loop."""
     from .config import HEAVY_EXECUTOR
 
     _stitch_progress["stage"] = "preparing"

@@ -15,7 +15,6 @@ def _platform():
 
 
 def _tk_open_file(title, filetypes):
-    """Open a native file dialog using tkinter (must run in a thread)."""
     import tkinter as tk
     from tkinter import filedialog
 
@@ -31,7 +30,6 @@ def _tk_open_file(title, filetypes):
 
 
 def _tk_save_file(title, filetypes, default_name):
-    """Open a native save dialog using tkinter (must run in a thread)."""
     import tkinter as tk
     from tkinter import filedialog
 
@@ -69,7 +67,6 @@ async def _run_dialog(func, *args):
 
 
 async def open_video_dialog():
-    """Open a native file dialog for video files."""
     ext_pattern = " ".join(f"*.{ext}" for ext in VIDEO_EXTENSIONS)
     filetypes = [("Video Files", ext_pattern), ("All Files", "*.*")]
 
@@ -89,7 +86,6 @@ async def open_video_dialog():
 
 
 async def open_audio_dialog():
-    """Open a native file dialog for audio files."""
     audio_pattern = " ".join(f"*.{ext}" for ext in AUDIO_EXTENSIONS)
     video_pattern = " ".join(f"*.{ext}" for ext in VIDEO_EXTENSIONS)
     all_pattern = audio_pattern + " " + video_pattern
@@ -118,7 +114,6 @@ async def open_audio_dialog():
 
 
 async def open_funscript_dialog():
-    """Open a native file dialog for funscript/JSON files."""
     ext_pattern = " ".join(f"*.{ext}" for ext in FUNSCRIPT_EXTENSIONS)
     filetypes = [("Funscript Files", ext_pattern), ("All Files", "*.*")]
 
@@ -145,7 +140,6 @@ async def open_funscript_dialog():
 
 
 async def save_funscript_dialog(data, default_name="script.funscript"):
-    """Save funscript data via native save dialog."""
     filetypes = [("Funscript Files", "*.funscript"), ("JSON Files", "*.json"), ("All Files", "*.*")]
 
     try:
@@ -172,7 +166,6 @@ async def save_funscript_dialog(data, default_name="script.funscript"):
 
 
 async def write_funscript(data, path):
-    """Write funscript data directly to a given path (no dialog)."""
     try:
         dir_part = os.path.dirname(path)
         if dir_part:

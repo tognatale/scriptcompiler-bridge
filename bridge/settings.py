@@ -87,7 +87,6 @@ def set_video_folder(folder):
 
 def get_settings():
     settings = load_settings()
-    # Always read autostart from OS to stay in sync
     settings["autostart"] = _get_autostart()
     return settings
 
@@ -96,7 +95,6 @@ def update_settings(updates: dict):
     allowed_keys = set(DEFAULT_SETTINGS.keys())
     filtered = {k: v for k, v in updates.items() if k in allowed_keys}
 
-    # Handle autostart toggle separately
     if "autostart" in filtered:
         enabled = bool(filtered["autostart"])
         _set_autostart(enabled)
@@ -106,13 +104,11 @@ def update_settings(updates: dict):
     settings.update(filtered)
     save_settings(settings)
 
-    # Sync autostart state from OS (in case it was set externally)
     settings["autostart"] = _get_autostart()
     return settings
 
 
 def _get_app_executable():
-    """Get the path to the bridge executable."""
     appimage = os.environ.get("APPIMAGE")
     if appimage:
         return appimage
@@ -155,7 +151,6 @@ def _platform():
 
 
 def _get_autostart():
-    """Check if autostart is currently enabled in the OS."""
     platform = _platform()
     if platform == 'win32':
         return _get_autostart_windows()
@@ -167,7 +162,6 @@ def _get_autostart():
 
 
 def _set_autostart(enabled):
-    """Enable or disable autostart in the OS."""
     platform = _platform()
     if platform == 'win32':
         _set_autostart_windows(enabled)

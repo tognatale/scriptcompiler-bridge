@@ -4,17 +4,14 @@ set -e
 echo "=== ScriptCompiler Bridge Build (macOS) ==="
 echo
 
-# Check for PyInstaller
 if ! command -v pyinstaller &> /dev/null; then
     echo "PyInstaller not found. Install with: pip install pyinstaller"
     exit 1
 fi
 
-# Clean previous build
 echo "Cleaning previous build..."
 rm -rf dist build
 
-# Download ffmpeg if not present
 if [ ! -f "ffmpeg/ffmpeg" ]; then
     echo
     echo "Downloading ffmpeg..."
@@ -36,7 +33,6 @@ else
     echo "ffmpeg already present, skipping download."
 fi
 
-# Run PyInstaller
 echo
 echo "Building with PyInstaller..."
 pyinstaller bridge.spec --noconfirm
@@ -44,10 +40,8 @@ pyinstaller bridge.spec --noconfirm
 echo
 echo "PyInstaller build complete: dist/ScriptCompilerBridge/"
 
-# Extract version
 VERSION=$(python3 -c "from bridge.config import BRIDGE_VERSION; print(BRIDGE_VERSION)")
 
-# Try to create DMG
 if command -v create-dmg &> /dev/null; then
     echo
     echo "Creating DMG installer..."

@@ -48,7 +48,6 @@ def add_folder_from_tray():
 
 
 def run_tray(port, quit_callback, on_ready=None):
-    """Run system tray icon. Must be called on the main thread (Windows requirement)."""
     import pystray
     from pystray import MenuItem as Item
 

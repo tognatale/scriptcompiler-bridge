@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _setup_bundled_ffmpeg():
-    """Add bundled ffmpeg to PATH if running from PyInstaller bundle."""
     if getattr(sys, 'frozen', False):
         bundle_dir = sys._MEIPASS
     else:
@@ -23,7 +22,6 @@ def _setup_bundled_ffmpeg():
     ffmpeg_path = os.path.join(ffmpeg_dir, ffmpeg_name)
 
     if os.path.isfile(ffmpeg_path):
-        # Prepend ffmpeg directory to PATH so librosa/audioread finds it
         current_path = os.environ.get('PATH', '')
         if ffmpeg_dir not in current_path:
             os.environ['PATH'] = ffmpeg_dir + os.pathsep + current_path
@@ -35,16 +33,10 @@ def _setup_bundled_ffmpeg():
 
 _setup_bundled_ffmpeg()
 
-# Module-level cancel event - set from async side, checked from sync side
 _cancel_event = threading.Event()
 
 
 def _analyze_audio_sync(video_path, options=None, progress_state=None):
-    """Run audio analysis synchronously (called in executor thread).
-
-    Extracts audio from video, runs beat detection via librosa,
-    optional section detection, tempo tracking, and energy analysis.
-    """
     options = options or {}
 
     try:
@@ -55,7 +47,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
     _cancel_event.clear()
 
     try:
-        # --- Stage 1: Load audio ---
         if progress_state is not None:
             progress_state["stage"] = "loading"
             progress_state["percent"] = 0
@@ -71,7 +62,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 2: Beat detection ---
         if progress_state is not None:
             progress_state["stage"] = "beats"
             progress_state["percent"] = 15
@@ -86,7 +76,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 3: Onset strength for beat strength values ---
         if progress_state is not None:
             progress_state["stage"] = "onset_strength"
             progress_state["percent"] = 30
@@ -96,7 +85,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 4: Multi-band onset detection for beat typing ---
         if progress_state is not None:
             progress_state["stage"] = "beat_types"
             progress_state["percent"] = 45
@@ -104,12 +92,10 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         S = np.abs(librosa.stft(y))
         freqs = librosa.fft_frequencies(sr=sr)
 
-        # Frequency band masks
         low_mask = (freqs >= 20) & (freqs < 250)
         mid_mask = (freqs >= 250) & (freqs < 4000)
         high_mask = (freqs >= 4000) & (freqs <= 16000)
 
-        # Per-band onset strength
         low_S = S[low_mask, :] if low_mask.any() else S[:1, :]
         mid_S = S[mid_mask, :] if mid_mask.any() else S[:1, :]
         high_S = S[high_mask, :] if high_mask.any() else S[:1, :]
@@ -127,7 +113,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 5: Classify beats ---
         if progress_state is not None:
             progress_state["stage"] = "classify_beats"
             progress_state["percent"] = 55
@@ -141,7 +126,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
 
             strength = float(onset_env[frame_idx] / max_onset)
 
-            # Determine beat type from band with highest onset energy
             li = min(frame_idx, len(low_onset) - 1)
             mi = min(frame_idx, len(mid_onset) - 1)
             hi = min(frame_idx, len(high_onset) - 1)
@@ -169,12 +153,10 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 6: Downbeats ---
         if progress_state is not None:
             progress_state["stage"] = "downbeats"
             progress_state["percent"] = 65
 
-        # Assume 4/4 time: every 4th beat is a downbeat
         if len(beat_frames) >= 4:
             downbeat_times = librosa.frames_to_time(beat_frames[::4], sr=sr)
         else:
@@ -185,7 +167,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 7: Section detection (optional, graceful fallback) ---
         if progress_state is not None:
             progress_state["stage"] = "sections"
             progress_state["percent"] = 75
@@ -212,7 +193,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
                 )
                 R_filtered = median_filter(R, size=(3, 3))
 
-                # Distance matrix from similarity
                 dist = 1.0 - librosa.util.normalize(R_filtered, norm=np.inf)
                 np.fill_diagonal(dist, 0)
 
@@ -240,7 +220,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
                         seg_start = i
                         current_label_idx += 1
 
-                # Final segment
                 if seg_start < len(labels):
                     label = section_labels[current_label_idx % len(section_labels)]
                     sections.append({
@@ -257,7 +236,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 8: Energy/loudness curve ---
         if progress_state is not None:
             progress_state["stage"] = "energy"
             progress_state["percent"] = 88
@@ -268,7 +246,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
             np.arange(len(rms)), sr=sr, hop_length=hop_length
         )
 
-        # Downsample to ~500ms intervals
         target_interval = 0.5
         step = max(1, int(target_interval * sr / hop_length))
 
@@ -283,13 +260,12 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
         if _cancel_event.is_set():
             return _cancelled(progress_state)
 
-        # --- Stage 9: Tempo tracking ---
         if progress_state is not None:
             progress_state["stage"] = "tempo"
             progress_state["percent"] = 95
 
         tempo_curve = []
-        window_length = int(10 * sr / hop_length)  # 10-second windows
+        window_length = int(10 * sr / hop_length)
         for start_frame in range(0, len(onset_env), window_length):
             end_frame = min(start_frame + window_length, len(onset_env))
             if end_frame - start_frame < 10:
@@ -304,7 +280,6 @@ def _analyze_audio_sync(video_path, options=None, progress_state=None):
                 "bpm": round(float(local_tempo[0])),
             })
 
-        # Done
         if progress_state is not None:
             progress_state["stage"] = "complete"
             progress_state["percent"] = 100
@@ -342,15 +317,10 @@ def _cancelled(progress_state):
 
 
 def cancel_audio_analysis():
-    """Signal the running analysis to stop."""
     _cancel_event.set()
 
 
 async def analyze_audio_with_progress(video_path, options=None):
-    """Analyze audio with async progress generator.
-
-    Yields progress dicts then final result, exactly like detect_scenes_with_progress.
-    """
     if not video_path:
         yield {"type": "result", "success": False, "error": "No video/audio path provided"}
         return

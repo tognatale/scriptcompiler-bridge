@@ -33,7 +33,6 @@ def _platform():
 
 
 def _parse_version(v):
-    """Parse version string like '1.2.3' into tuple (1, 2, 3)."""
     v = v.lstrip("v")
     parts = []
     for p in v.split("."):
@@ -57,7 +56,6 @@ def _match_asset(name):
 
 
 def check_for_update():
-    """Check GitHub Releases for a newer version. Returns update info dict."""
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
         req = Request(url, headers={"Accept": "application/vnd.github.v3+json"})
@@ -106,7 +104,6 @@ def check_for_update():
 
 
 def get_cached_update():
-    """Return cached update info without making a network request."""
     if not _update_cache["checked"]:
         return None
     if not _update_cache["latest_version"]:
@@ -228,7 +225,6 @@ def _install_linux_update(url, progress=None):
 
 
 def download_and_run_update(shutdown_callback=None, progress=None):
-    """Download the latest version, install it, then signal shutdown."""
     url = _update_cache.get("download_url")
     if not url:
         return {"success": False, "error": "No download URL available"}
@@ -246,7 +242,7 @@ def download_and_run_update(shutdown_callback=None, progress=None):
             logger.info("Installer saved to %s, launching...", installer_path)
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = 0  # SW_HIDE
+            startupinfo.wShowWindow = 0
             subprocess.Popen(
                 [installer_path, "/SILENT", "/RESTARTAPPLICATIONS"],
                 creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,

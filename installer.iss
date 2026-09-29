@@ -1,7 +1,3 @@
-; Inno Setup script for ScriptCompiler Bridge
-; Requires Inno Setup 6+
-; Build with: iscc installer.iss
-
 #define MyAppName "ScriptCompiler Bridge"
 #ifndef MyAppVersion
   #define MyAppVersion "1.2.2"
@@ -27,7 +23,6 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-; Allow upgrading in-place without uninstalling first
 UsePreviousAppDir=yes
 CloseApplications=yes
 RestartApplications=no
@@ -51,15 +46,12 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Registry]
-; Launch on startup (current user only)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: string; ValueName: "ScriptCompilerBridge"; \
     ValueData: """{app}\{#MyAppExeName}"" --autostart"; \
     Flags: uninsdeletevalue; Tasks: launchstartup
-; The bridge can also add this value itself, so always remove it on uninstall
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: none; ValueName: "ScriptCompilerBridge"; Flags: uninsdeletevalue
-; Open .funscript files with the bridge. It is the default only when no other app is.
 Root: HKA; Subkey: "Software\Classes\ScriptCompilerBridge.funscript"; \
     ValueType: string; ValueName: ""; ValueData: "Funscript"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\ScriptCompilerBridge.funscript\DefaultIcon"; \
@@ -81,7 +73,6 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--updated"; \
 Filename: "taskkill"; Parameters: "/F /IM ScriptCompilerBridge.exe"; Flags: runhidden
 
 [Code]
-// Kill running instance before install/upgrade
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;

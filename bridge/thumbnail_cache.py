@@ -13,13 +13,12 @@ logger = logging.getLogger(__name__)
 THUMB_CACHE_DIR_NAME = "thumb-cache"
 JPEG_QUALITY = 85
 THUMB_MAX_WIDTH = 320
-MAX_CACHE_SIZE_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB
+MAX_CACHE_SIZE_BYTES = 2 * 1024 * 1024 * 1024
 
 _cancel_event = threading.Event()
 
 
 def cancel_pregeneration():
-    """Signal the running pregeneration to stop."""
     _cancel_event.set()
 
 
@@ -30,7 +29,6 @@ def _get_cache_base_dir():
 
 
 def compute_video_hash(video_path):
-    """Compute a unique hash for a video based on path, size, and mtime."""
     real = os.path.realpath(video_path)
     try:
         stat = os.stat(real)
@@ -41,7 +39,6 @@ def compute_video_hash(video_path):
 
 
 def get_video_cache_dir(video_path):
-    """Return the cache directory for a specific video. Creates if needed."""
     h = compute_video_hash(video_path)
     if h is None:
         return None
@@ -79,7 +76,6 @@ def _frame_path(cache_dir, time_ms):
 
 
 def get_cached_frame(video_path, time_ms):
-    """Read a single cached frame from disk. Returns bytes or None."""
     cache_dir = get_video_cache_dir(video_path)
     if cache_dir is None:
         return None
@@ -93,7 +89,6 @@ def get_cached_frame(video_path, time_ms):
 
 
 def get_cached_frames_batch(video_path, times_ms):
-    """Read cached frames from disk. Returns dict of {time_ms: bytes} for hits."""
     cache_dir = get_video_cache_dir(video_path)
     if cache_dir is None:
         return {}
@@ -107,7 +102,6 @@ def get_cached_frames_batch(video_path, times_ms):
             except OSError:
                 pass
 
-    # Update last_accessed if we served any frames
     if results:
         meta = load_metadata(cache_dir)
         meta["last_accessed"] = _time.time()
@@ -117,7 +111,6 @@ def get_cached_frames_batch(video_path, times_ms):
 
 
 def save_frames_batch(video_path, frames):
-    """Write frames to disk cache. frames: dict of {time_ms: jpeg_bytes}."""
     cache_dir = get_video_cache_dir(video_path)
     if cache_dir is None:
         return
@@ -129,7 +122,6 @@ def save_frames_batch(video_path, frames):
         except OSError as e:
             logger.warning("Failed to write frame %s: %s", t, e)
 
-    # Update metadata
     meta = load_metadata(cache_dir)
     existing = set(meta.get("cached_times", []))
     existing.update(int(t) for t in frames.keys())
@@ -148,12 +140,6 @@ def save_frames_batch(video_path, frames):
 
 
 def pregenerate_frames(video_path, times_ms, progress_state, cancel_event):
-    """Core pregeneration function. Runs in executor thread.
-
-    Extracts frames via OpenCV in batches, saves to disk.
-    Updates progress_state dict for async polling.
-    Checks cancel_event between batches.
-    """
     from .video_library import _frame_capture
 
     cache_dir = get_video_cache_dir(video_path)
@@ -163,7 +149,6 @@ def pregenerate_frames(video_path, times_ms, progress_state, cancel_event):
 
     cancel_event.clear()
 
-    # Filter out already-cached times
     uncached = []
     for t in sorted(times_ms):
         fp = _frame_path(cache_dir, t)
@@ -177,7 +162,6 @@ def pregenerate_frames(video_path, times_ms, progress_state, cancel_event):
 
     if not uncached:
         progress_state["done"] = True
-        # Update last_accessed
         meta = load_metadata(cache_dir)
         meta["last_accessed"] = _time.time()
         save_metadata(cache_dir, meta)
@@ -195,13 +179,11 @@ def pregenerate_frames(video_path, times_ms, progress_state, cancel_event):
 
             batch = uncached[i:i + BATCH_SIZE]
 
-            # Extract frames via OpenCV (holds _CachedCapture lock during extraction)
             frames = _frame_capture.extract_frames_batch(video_path, batch)
 
             if not frames:
                 continue
 
-            # Write to disk (no lock held)
             for t, data in frames.items():
                 fp = _frame_path(cache_dir, t)
                 try:
@@ -212,7 +194,6 @@ def pregenerate_frames(video_path, times_ms, progress_state, cancel_event):
             cached_count += len(frames)
             progress_state["cached"] = cached_count
 
-        # Update metadata once at the end
         meta = load_metadata(cache_dir)
         existing = set(meta.get("cached_times", []))
         existing.update(int(t) for t in times_ms)
@@ -239,10 +220,6 @@ def pregenerate_frames(video_path, times_ms, progress_state, cancel_event):
 
 
 async def pregenerate_with_progress(video_path, times_ms):
-    """Async generator that yields progress dicts and final result.
-
-    Same pattern as detect_scenes_with_progress in scene_detector.py.
-    """
     import asyncio
 
     if not video_path:
@@ -286,7 +263,6 @@ async def pregenerate_with_progress(video_path, times_ms):
 
 
 def cleanup_old_caches(max_size_bytes=MAX_CACHE_SIZE_BYTES):
-    """Remove oldest caches when total size exceeds max_size_bytes."""
     base = _get_cache_base_dir()
     if not base.is_dir():
         return
@@ -314,7 +290,6 @@ def cleanup_old_caches(max_size_bytes=MAX_CACHE_SIZE_BYTES):
     if total_size <= max_size_bytes:
         return
 
-    # Sort by last_accessed ascending (oldest first)
     entries.sort(key=lambda e: e["last_accessed"])
 
     for entry in entries:

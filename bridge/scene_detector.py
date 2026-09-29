@@ -6,16 +6,10 @@ from .config import HEAVY_EXECUTOR
 
 logger = logging.getLogger(__name__)
 
-# Module-level cancel event - set from async side, checked from sync side
 _cancel_event = threading.Event()
 
 
 def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progress_state=None):
-    """Run PySceneDetect synchronously (called in executor thread).
-
-    Uses the official detect_scenes API in chunked calls (5 seconds each)
-    so we can check for cancellation between chunks while keeping full accuracy.
-    """
     try:
         from scenedetect import open_video, SceneManager, ContentDetector, FrameTimecode
     except ImportError as e:
@@ -33,7 +27,6 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
         width = video.frame_size[0] if hasattr(video, 'frame_size') else 0
         height = video.frame_size[1] if hasattr(video, 'frame_size') else 0
 
-        # Auto-downscale based on resolution if not specified
         if downscale <= 0:
             if height >= 2160:
                 downscale = 4
@@ -52,11 +45,9 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
         if total_frames <= 0:
             return {"success": False, "error": "Could not determine video duration"}
 
-        # Apply downscale via PySceneDetect's built-in support
         if downscale > 1:
             video.downscale = downscale
 
-        # Share video ref and total frames for progress polling
         if progress_state is not None:
             progress_state["video"] = video
             progress_state["total_frames"] = total_frames
@@ -64,8 +55,6 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
         scene_manager = SceneManager()
         scene_manager.add_detector(ContentDetector(threshold=threshold))
 
-        # Process in 5-second chunks so we can check cancel flag between them.
-        # detect_scenes accumulates results across multiple calls on the same SceneManager.
         chunk_frames = int(5.0 * fps)
         last_scene_count = 0
 
@@ -77,7 +66,6 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
                     progress_state["done"] = True
                 return {"success": False, "cancelled": True, "error": "Cancelled by user"}
 
-            # Calculate end_time for this chunk based on current position + chunk size
             current_frame = video.frame_number
             end_frame = min(current_frame + chunk_frames, total_frames)
             end_time = FrameTimecode(end_frame, fps)
@@ -88,7 +76,6 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
                 frame_skip=frame_skip,
             )
 
-            # Share partial scene results for progressive display
             if progress_state is not None:
                 current_scenes = scene_manager.get_scene_list()
                 if len(current_scenes) > last_scene_count:
@@ -103,7 +90,6 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
                         for s, e in current_scenes
                     ]
 
-            # If no frames were processed, we've reached the end
             if n == 0:
                 break
 
@@ -132,12 +118,10 @@ def _detect_scenes_sync(video_path, threshold, downscale=0, frame_skip=0, progre
 
 
 def cancel_detection():
-    """Signal the running detection to stop."""
     _cancel_event.set()
 
 
 async def detect_scenes(video_path, threshold=30.0):
-    """Detect scene boundaries in a video file (no progress)."""
     if not video_path:
         return {"success": False, "error": "No video path provided"}
 
@@ -146,28 +130,20 @@ async def detect_scenes(video_path, threshold=30.0):
 
 
 async def detect_scenes_with_progress(video_path, threshold=30.0, downscale=0, frame_skip=0):
-    """Detect scenes with async progress generator.
-
-    Yields progress dicts: { "type": "progress", "framesProcessed": N, "totalFrames": N, "percent": N }
-    Final yield: { "type": "result", "success": ..., "scenes": ..., "sceneCount": ... }
-    """
     if not video_path:
         yield {"type": "result", "success": False, "error": "No video path provided"}
         return
 
     loop = asyncio.get_event_loop()
 
-    # Shared state for progress polling
     progress_state = {"video": None, "total_frames": 0, "done": False}
 
-    # Start detection in background thread
     future = loop.run_in_executor(
         HEAVY_EXECUTOR, _detect_scenes_sync, video_path, threshold, downscale, frame_skip, progress_state
     )
 
     last_percent = -1
 
-    # Poll progress while detection runs
     while not future.done():
         await asyncio.sleep(0.5)
 

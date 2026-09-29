@@ -16,11 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class _CachedCapture:
-    """Keeps a cv2.VideoCapture handle open for reuse across frame requests.
-    Auto-closes after idle_timeout seconds of inactivity.
-    Thread-safe: the lock is held for the entire seek+read+encode cycle.
-    """
-
     def __init__(self, idle_timeout=30.0):
         self._lock = threading.Lock()
         self._cap = None
@@ -97,20 +92,15 @@ class _CachedCapture:
                 return {}
 
             fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-            # If next target is within this many ms ahead of current position,
-            # read forward instead of seeking. ~2 seconds worth of frames.
             read_ahead_threshold = 2000.0
 
             results = {}
             current_pos = -1.0
 
             for t in sorted(times_ms):
-                # Decide: seek or read forward?
                 if current_pos < 0 or t < current_pos or (t - current_pos) > read_ahead_threshold:
-                    # Must seek: first frame, backwards, or too far ahead
                     cap.set(cv2.CAP_PROP_POS_MSEC, t)
                 else:
-                    # Read forward to target - much faster than seeking
                     frames_to_skip = int((t - current_pos) / (1000.0 / fps)) - 1
                     for _ in range(max(0, frames_to_skip)):
                         cap.grab()
@@ -161,7 +151,7 @@ MIME_MAP = {
     ".m4v": "video/x-m4v",
 }
 
-CHUNK_SIZE = 64 * 1024  # 64KB
+CHUNK_SIZE = 64 * 1024
 
 _cached_videos = None
 
@@ -246,19 +236,14 @@ def get_mime_type(file_path):
 
 
 def generate_frame_at_time(file_path: str, time_ms: float):
-    """Extract a single JPEG frame from a video at a specific millisecond timestamp."""
     return _frame_capture.extract_frame(file_path, time_ms)
 
 
 def generate_frames_batch(file_path: str, times_ms: list):
-    """Extract multiple JPEG frames from a video at specific millisecond timestamps.
-    Returns a dict mapping time_ms -> jpeg_bytes.
-    """
     return _frame_capture.extract_frames_batch(file_path, times_ms)
 
 
 def generate_thumbnail(file_path: str, seek_percent: float = 10.0):
-    """Generate a JPEG thumbnail from a video file using OpenCV."""
     try:
         import cv2
     except ImportError:
@@ -278,7 +263,6 @@ def generate_thumbnail(file_path: str, seek_percent: float = 10.0):
         if not ret:
             return None
 
-        # Resize to thumbnail size (max width 320, maintain aspect ratio)
         h, w = frame.shape[:2]
         thumb_w = min(w, 320)
         thumb_h = int(h * (thumb_w / w))
