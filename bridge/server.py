@@ -32,7 +32,13 @@ from .ws_handlers import HANDLERS as WS_HANDLERS
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title=BRIDGE_NAME, version=BRIDGE_VERSION)
+app = FastAPI(
+    title=BRIDGE_NAME,
+    version=BRIDGE_VERSION,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
