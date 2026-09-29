@@ -14,6 +14,7 @@ if sys.stderr is None:
 import uvicorn
 
 from bridge.config import DEFAULT_PORT, DEFAULT_HOST, BRIDGE_NAME, BRIDGE_VERSION
+from bridge.request_guard import allow_bind_host
 from bridge.server import set_shutdown_callback
 
 logging.basicConfig(
@@ -37,6 +38,7 @@ def main():
     parser.add_argument("--host", default=DEFAULT_HOST, help=f"Host to bind to (default: {DEFAULT_HOST})")
     parser.add_argument("--no-tray", action="store_true", help="Disable system tray icon")
     args = parser.parse_args()
+    allow_bind_host(args.host)
 
     logger.info("Starting %s v%s on %s:%d", BRIDGE_NAME, BRIDGE_VERSION, args.host, args.port)
 

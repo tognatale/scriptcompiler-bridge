@@ -13,6 +13,7 @@ from typing import Optional
 from urllib.parse import quote as url_encode
 
 from .config import BRIDGE_VERSION, BRIDGE_NAME, CORS_ALLOW_ORIGIN_REGEX, DEFAULT_PORT, EXECUTOR
+from .request_guard import RequestGuard
 from .tracker_bridge import TrackerBridge
 from .file_handler import open_video_dialog, open_audio_dialog, open_funscript_dialog, save_funscript_dialog, write_funscript, is_dialog_allowed_path
 from .scene_detector import detect_scenes, cancel_detection
@@ -47,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestGuard)
 
 tracker = TrackerBridge()
 _shutdown_server = None
