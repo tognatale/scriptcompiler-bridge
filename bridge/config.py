@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
-BRIDGE_VERSION = "1.2.2"
+BRIDGE_VERSION = "1.3.0"
 BRIDGE_NAME = "ScriptCompiler Bridge"
 GITHUB_REPO = "telemacy/scriptcompiler-bridge"
 
