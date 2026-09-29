@@ -30,7 +30,7 @@ from .video_library import (
 )
 from .desktop import open_path
 from .logs import log_dir
-from .pickers import pick_folder
+from .pickers import PickerUnavailable, pick_folder
 from . import thumbnail_cache
 from .ws_handlers import HANDLERS as WS_HANDLERS
 
@@ -120,7 +120,10 @@ async def capabilities():
 @app.post("/folders/pick")
 async def pick_folder_endpoint():
     loop = asyncio.get_running_loop()
-    folder = await loop.run_in_executor(EXECUTOR, pick_folder)
+    try:
+        folder = await loop.run_in_executor(EXECUTOR, pick_folder)
+    except PickerUnavailable as e:
+        return JSONResponse(status_code=400, content={"error": str(e), "folders": get_video_folders()})
     if not folder:
         return JSONResponse(content={"cancelled": True, "folders": get_video_folders()})
     if not os.path.isdir(folder):

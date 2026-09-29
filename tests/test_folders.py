@@ -3,6 +3,7 @@ import os
 import pytest
 
 from bridge import server, settings, video_library
+from bridge.pickers import PickerUnavailable
 
 
 @pytest.fixture
@@ -123,3 +124,14 @@ def test_shutdown_without_a_quit_callback_is_refused(client, monkeypatch):
 def test_live_refresh_from_another_thread_without_a_loop_does_nothing(monkeypatch):
     monkeypatch.setattr(server, "_loop", None)
     server.notify_capabilities_changed()
+
+
+def test_pick_without_a_picker_explains_what_to_install(client, monkeypatch, broadcasts):
+    def missing():
+        raise PickerUnavailable("Install zenity")
+
+    monkeypatch.setattr(server, "pick_folder", missing)
+    response = client.post("/folders/pick")
+    assert response.status_code == 400
+    assert response.json()["error"] == "Install zenity"
+    assert broadcasts == []

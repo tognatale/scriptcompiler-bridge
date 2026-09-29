@@ -1,13 +1,19 @@
 import asyncio
 import os
 import logging
+import sys
 
 from .config import VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, FUNSCRIPT_EXTENSIONS, EXECUTOR
+from .pickers import PickerUnavailable, pick_file, pick_save_file
 
 logger = logging.getLogger(__name__)
 
 # Paths returned by file dialogs are added here so /files/stream can serve them
 _dialog_allowed_paths = set()
+
+
+def _platform():
+    return sys.platform
 
 
 def is_dialog_allowed_path(path):
@@ -53,13 +59,32 @@ def _tk_save_file(title, filetypes, default_name):
     return path if path else None
 
 
+def _open_file(title, filetypes, extensions, label):
+    if _platform() == "win32":
+        return _tk_open_file(title, filetypes)
+    return pick_file(title, extensions, label)
+
+
+def _save_file(title, filetypes, default_name, extensions, label):
+    if _platform() == "win32":
+        return _tk_save_file(title, filetypes, default_name)
+    return pick_save_file(title, default_name, extensions, label)
+
+
+async def _run_dialog(func, *args):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(EXECUTOR, func, *args)
+
+
 async def open_video_dialog():
     """Open a native file dialog for video files."""
     ext_pattern = " ".join(f"*.{ext}" for ext in VIDEO_EXTENSIONS)
     filetypes = [("Video Files", ext_pattern), ("All Files", "*.*")]
 
-    loop = asyncio.get_event_loop()
-    path = await loop.run_in_executor(EXECUTOR, _tk_open_file, "Open Video", filetypes)
+    try:
+        path = await _run_dialog(_open_file, "Open Video", filetypes, VIDEO_EXTENSIONS, "Video files")
+    except PickerUnavailable as e:
+        return {"error": str(e)}
 
     if not path:
         return None
@@ -83,8 +108,12 @@ async def open_audio_dialog():
         ("All Files", "*.*"),
     ]
 
-    loop = asyncio.get_event_loop()
-    path = await loop.run_in_executor(EXECUTOR, _tk_open_file, "Open Audio", filetypes)
+    try:
+        path = await _run_dialog(
+            _open_file, "Open Audio", filetypes, AUDIO_EXTENSIONS + VIDEO_EXTENSIONS, "Audio and video files"
+        )
+    except PickerUnavailable as e:
+        return {"error": str(e)}
 
     if not path:
         return None
@@ -101,8 +130,10 @@ async def open_funscript_dialog():
     ext_pattern = " ".join(f"*.{ext}" for ext in FUNSCRIPT_EXTENSIONS)
     filetypes = [("Funscript Files", ext_pattern), ("All Files", "*.*")]
 
-    loop = asyncio.get_event_loop()
-    path = await loop.run_in_executor(EXECUTOR, _tk_open_file, "Open Funscript", filetypes)
+    try:
+        path = await _run_dialog(_open_file, "Open Funscript", filetypes, FUNSCRIPT_EXTENSIONS, "Funscript files")
+    except PickerUnavailable as e:
+        return {"error": str(e)}
 
     if not path:
         return None
@@ -125,8 +156,12 @@ async def save_funscript_dialog(data, default_name="script.funscript"):
     """Save funscript data via native save dialog."""
     filetypes = [("Funscript Files", "*.funscript"), ("JSON Files", "*.json"), ("All Files", "*.*")]
 
-    loop = asyncio.get_event_loop()
-    path = await loop.run_in_executor(EXECUTOR, _tk_save_file, "Save Funscript", filetypes, default_name)
+    try:
+        path = await _run_dialog(
+            _save_file, "Save Funscript", filetypes, default_name, FUNSCRIPT_EXTENSIONS, "Funscript files"
+        )
+    except PickerUnavailable as e:
+        return {"error": str(e)}
 
     if not path:
         return None
