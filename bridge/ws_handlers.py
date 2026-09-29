@@ -7,7 +7,7 @@ from .audio_analyzer import analyze_audio_with_progress, cancel_audio_analysis
 from .thumbnail_cache import pregenerate_with_progress, cancel_pregeneration
 from .settings import get_video_folders
 from .video_library import is_path_in_allowed_folders
-from .file_handler import is_dialog_allowed_path
+from .grants import can_read
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def handle_cleanup(tracker, msg):
 def _is_allowed_path(path):
     """Check if a path is in video folders or was returned by a file dialog."""
     folders = get_video_folders()
-    return is_path_in_allowed_folders(path, folders) or is_dialog_allowed_path(path)
+    return is_path_in_allowed_folders(path, folders) or can_read(path)
 
 
 async def handle_detect_scenes(websocket, msg, command, request_id):

@@ -1,6 +1,6 @@
 import pytest
 
-from bridge import settings
+from bridge import grants, settings
 
 EDITOR = {"Origin": "https://scriptcompiler.com"}
 
@@ -39,3 +39,17 @@ def test_refuses_paths_outside_the_video_folder(client, video_folder, tmp_path):
     response = _write(client, target, data="x")
     assert response.status_code == 403
     assert not target.exists()
+
+
+def test_writes_a_granted_script_outside_the_video_folders(client, video_folder, tmp_path):
+    target = tmp_path / "opened.funscript"
+    grants.allow_write(str(target))
+    response = _write(client, target, data="{}")
+    assert response.status_code == 200
+    assert target.read_text(encoding="utf-8") == "{}"
+
+
+def test_writes_a_granted_script_without_any_video_folder(client, tmp_path):
+    target = tmp_path / "opened.funscript"
+    grants.allow_write(str(target))
+    assert _write(client, target, data="{}").status_code == 200

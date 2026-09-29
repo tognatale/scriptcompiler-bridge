@@ -1,6 +1,6 @@
 import asyncio
 
-from bridge import file_handler
+from bridge import file_handler, grants
 from bridge.pickers import PickerUnavailable
 
 
@@ -20,7 +20,7 @@ def test_linux_open_video_uses_the_system_picker(monkeypatch, tmp_path):
     monkeypatch.setattr(file_handler, "pick_file", fake_pick)
     assert run(file_handler.open_video_dialog()) == {"path": video, "name": "clip.mp4"}
     assert seen == [("Open Video", "Video files")]
-    assert file_handler.is_dialog_allowed_path(video)
+    assert grants.can_read(video)
 
 
 def test_windows_open_video_keeps_the_tk_dialog(monkeypatch):

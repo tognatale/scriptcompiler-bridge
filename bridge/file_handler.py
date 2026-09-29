@@ -4,22 +4,14 @@ import logging
 import sys
 
 from .config import VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, FUNSCRIPT_EXTENSIONS, DIALOG_EXECUTOR
+from .grants import allow_read
 from .pickers import PickerUnavailable, pick_file, pick_save_file
 
 logger = logging.getLogger(__name__)
 
-# Paths returned by file dialogs are added here so /files/stream can serve them
-_dialog_allowed_paths = set()
-
 
 def _platform():
     return sys.platform
-
-
-def is_dialog_allowed_path(path):
-    """Check if a path was returned by a file dialog."""
-    real = os.path.realpath(path)
-    return real in _dialog_allowed_paths
 
 
 def _tk_open_file(title, filetypes):
@@ -89,7 +81,7 @@ async def open_video_dialog():
     if not path:
         return None
 
-    _dialog_allowed_paths.add(os.path.realpath(path))
+    allow_read(path)
     return {
         "path": path,
         "name": os.path.basename(path),
@@ -118,7 +110,7 @@ async def open_audio_dialog():
     if not path:
         return None
 
-    _dialog_allowed_paths.add(os.path.realpath(path))
+    allow_read(path)
     return {
         "path": path,
         "name": os.path.basename(path),

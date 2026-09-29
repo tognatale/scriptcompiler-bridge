@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse, Response
 
 from .config import VIDEO_EXTENSIONS
 from .settings import get_video_folders
-from .file_handler import is_dialog_allowed_path
+from .grants import can_read
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +295,7 @@ async def stream_video(file_path: str, request: Request):
         return Response(status_code=404, content="File not found")
 
     folders = get_video_folders()
-    if not is_path_in_allowed_folders(file_path, folders) and not is_dialog_allowed_path(file_path):
+    if not is_path_in_allowed_folders(file_path, folders) and not can_read(file_path):
         return Response(status_code=403, content="Access denied")
 
     file_size = os.path.getsize(file_path)

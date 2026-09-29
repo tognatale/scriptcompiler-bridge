@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from bridge import server, settings
+from bridge import grants, server, settings
 
 
 @pytest.fixture(autouse=True)
@@ -9,6 +9,12 @@ def settings_file(tmp_path, monkeypatch):
     path = tmp_path / "settings.json"
     monkeypatch.setattr(settings, "get_settings_path", lambda: path)
     return path
+
+
+@pytest.fixture(autouse=True)
+def fresh_grants(monkeypatch):
+    monkeypatch.setattr(grants, "_readable", set())
+    monkeypatch.setattr(grants, "_writable", set())
 
 
 @pytest.fixture

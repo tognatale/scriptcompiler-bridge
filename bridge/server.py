@@ -15,7 +15,8 @@ from urllib.parse import quote as url_encode
 from .config import BRIDGE_VERSION, BRIDGE_NAME, CORS_ALLOW_ORIGIN_REGEX, DEFAULT_PORT, DIALOG_EXECUTOR, EXECUTOR, FUNSCRIPT_EXTENSIONS
 from .request_guard import RequestGuard
 from .tracker_bridge import TrackerBridge
-from .file_handler import open_video_dialog, open_audio_dialog, open_funscript_dialog, save_funscript_dialog, write_funscript, is_dialog_allowed_path
+from .file_handler import open_video_dialog, open_audio_dialog, open_funscript_dialog, save_funscript_dialog, write_funscript
+from .grants import can_read, can_write
 from .scene_detector import detect_scenes, cancel_detection
 from .video_stitcher import start_stitch_background, get_stitch_progress, cancel_stitching
 from .audio_analyzer import cancel_audio_analysis
@@ -168,7 +169,7 @@ class SceneDetectRequest(BaseModel):
 @app.post("/scenes/detect")
 async def detect_scenes_endpoint(req: SceneDetectRequest):
     folders = get_video_folders()
-    if not is_path_in_allowed_folders(req.videoPath, folders) and not is_dialog_allowed_path(req.videoPath):
+    if not is_path_in_allowed_folders(req.videoPath, folders) and not can_read(req.videoPath):
         return JSONResponse(status_code=403, content={"error": "Access denied"})
     result = await detect_scenes(req.videoPath, req.threshold)
     return JSONResponse(content=result)
@@ -190,7 +191,7 @@ async def open_audio():
 async def stream_file(path: str):
     """Stream a file from disk. Used to load audio into the browser for playback."""
     folders = get_video_folders()
-    if not is_path_in_allowed_folders(path, folders) and not is_dialog_allowed_path(path):
+    if not is_path_in_allowed_folders(path, folders) and not can_read(path):
         return JSONResponse(status_code=403, content={"error": "Access denied"})
     if not os.path.isfile(path):
         return JSONResponse(status_code=404, content={"error": "File not found"})
@@ -222,7 +223,8 @@ class WriteFunscriptRequest(BaseModel):
 @app.post("/files/write-funscript")
 async def write_funscript_endpoint(req: WriteFunscriptRequest):
     folders = get_video_folders()
-    if not folders or not is_path_in_allowed_folders(req.path, folders):
+    in_folders = bool(folders) and is_path_in_allowed_folders(req.path, folders)
+    if not in_folders and not can_write(req.path):
         return JSONResponse(status_code=403, content={"success": False, "error": "Access denied"})
     if os.path.splitext(req.path)[1].lower().lstrip(".") not in FUNSCRIPT_EXTENSIONS:
         return JSONResponse(status_code=400, content={"success": False, "error": "Only .funscript and .json files can be written"})
@@ -369,7 +371,7 @@ _stitch_future = None
 async def stitch_videos_endpoint(req: StitchRequest):
     global _stitch_future
     folders = get_video_folders()
-    if not is_path_in_allowed_folders(req.video_path, folders) and not is_dialog_allowed_path(req.video_path):
+    if not is_path_in_allowed_folders(req.video_path, folders) and not can_read(req.video_path):
         return JSONResponse(status_code=403, content={"error": "Access denied"})
 
     if not os.path.isfile(req.video_path):
@@ -433,7 +435,7 @@ async def stitch_cancel_endpoint():
 @app.get("/files/read")
 async def read_file_endpoint(path: str):
     folders = get_video_folders()
-    if not is_path_in_allowed_folders(path, folders) and not is_dialog_allowed_path(path):
+    if not is_path_in_allowed_folders(path, folders) and not can_read(path):
         return JSONResponse(status_code=403, content={"error": "Access denied"})
 
     if not os.path.isfile(path):
@@ -445,7 +447,7 @@ async def read_file_endpoint(path: str):
 @app.head("/files/read")
 async def check_file_exists_endpoint(path: str):
     folders = get_video_folders()
-    if not is_path_in_allowed_folders(path, folders) and not is_dialog_allowed_path(path):
+    if not is_path_in_allowed_folders(path, folders) and not can_read(path):
         return JSONResponse(status_code=403, content={"error": "Access denied"})
 
     if not os.path.isfile(path):
