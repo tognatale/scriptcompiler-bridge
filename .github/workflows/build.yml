@@ -84,11 +84,12 @@ jobs:
         run: |
           if [ ! -f "ffmpeg/ffmpeg" ]; then
             mkdir -p ffmpeg
-            curl -L "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip" -o ffmpeg/ffmpeg.zip
+            curl -fsSL "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip" -o ffmpeg/ffmpeg.zip
             unzip -o ffmpeg/ffmpeg.zip -d ffmpeg/
             rm -f ffmpeg/ffmpeg.zip
             chmod +x ffmpeg/ffmpeg
           fi
+          file ffmpeg/ffmpeg | grep -q arm64
 
       - name: Download yt-dlp (macOS)
         run: |
