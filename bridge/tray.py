@@ -1,11 +1,13 @@
 import logging
 import os
-import signal
 import sys
 
 from .config import BRIDGE_VERSION
-from .desktop import set_tray_icon
-from .settings import get_video_folders, set_video_folder
+from .desktop import open_editor, open_path, set_tray_icon
+from .logs import log_dir
+from .pickers import pick_folder
+from .server import notify_capabilities_changed
+from .settings import add_video_folder, get_video_folders
 from .video_library import invalidate_cache
 
 logger = logging.getLogger(__name__)
@@ -26,42 +28,23 @@ def _load_icon_image():
     return Image.new("RGBA", (64, 64), (46, 125, 246, 255))
 
 
-def _pick_folder():
-    """Open a native Windows folder picker using PowerShell (works from any thread)."""
-    import subprocess
-    import tempfile
-
-    # Write PowerShell script to a temp file to avoid quoting issues
-    ps_code = """
-Add-Type -AssemblyName System.Windows.Forms
-$d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = "Select Video Folder"
-$d.ShowNewFolderButton = $true
-if ($d.ShowDialog() -eq "OK") { Write-Output $d.SelectedPath }
-"""
-    try:
-        ps_file = os.path.join(tempfile.gettempdir(), "sc_folder_pick.ps1")
-        with open(ps_file, "w") as f:
-            f.write(ps_code)
-
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps_file],
-            capture_output=True, text=True, timeout=120,
-            creationflags=0x08000000,  # CREATE_NO_WINDOW
-        )
-        path = result.stdout.strip()
-        return path if path else None
-    except Exception as e:
-        logger.error("Folder picker failed: %s", e)
-        return None
+def folder_label(folders):
+    if not folders:
+        return "Video folders: none"
+    if len(folders) == 1:
+        return f"Video folder: {folders[0]}"
+    return f"Video folders: {len(folders)}"
 
 
-def _get_folder_label():
-    """Return the current video folder display text for the tray menu."""
-    folders = get_video_folders()
-    if folders:
-        return f"Video Folder: {folders[0]}"
-    return "Video Folder: (not set)"
+def add_folder_from_tray():
+    folder = pick_folder()
+    if not folder or not os.path.isdir(folder):
+        return False
+    add_video_folder(folder)
+    invalidate_cache()
+    notify_capabilities_changed()
+    logger.info("Video folder added from the tray: %s", folder)
+    return True
 
 
 def run_tray(port, quit_callback, on_ready=None):
@@ -69,38 +52,34 @@ def run_tray(port, quit_callback, on_ready=None):
     import pystray
     from pystray import MenuItem as Item
 
-    icon_image = _load_icon_image()
-
-    def on_quit(icon, item):
-        logger.info("Quit requested from tray")
-        quit_callback()
-
-    def on_set_folder(icon, item):
-        folder = _pick_folder()
-        if folder:
-            set_video_folder(folder)
-            invalidate_cache()
-            logger.info("Video folder set to: %s", folder)
+    def on_add_folder(icon, item):
+        if add_folder_from_tray():
             icon.update_menu()
 
     def on_refresh(icon, item):
         invalidate_cache()
         logger.info("Video library cache cleared, will rescan on next request")
 
+    def on_quit(icon, item):
+        logger.info("Quit requested from tray")
+        quit_callback()
+
     menu = pystray.Menu(
+        Item("Open ScriptCompiler", lambda icon, item: open_editor(), default=True),
         Item(f"ScriptCompiler Bridge v{BRIDGE_VERSION}", lambda: None, enabled=False),
         Item(f"Port: {port}", lambda: None, enabled=False),
         pystray.Menu.SEPARATOR,
-        Item(lambda text: _get_folder_label(), lambda: None, enabled=False),
-        Item("Set Video Folder...", on_set_folder),
+        Item(lambda item: folder_label(get_video_folders()), lambda: None, enabled=False),
+        Item("Add Video Folder...", on_add_folder),
         Item("Refresh Library", on_refresh),
         pystray.Menu.SEPARATOR,
+        Item("Open Log Folder", lambda icon, item: open_path(str(log_dir()))),
         Item("Quit", on_quit),
     )
 
     icon = pystray.Icon(
         name="scriptcompiler-bridge",
-        icon=icon_image,
+        icon=_load_icon_image(),
         title=f"ScriptCompiler Bridge (:{port})",
         menu=menu,
     )
