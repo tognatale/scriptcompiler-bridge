@@ -22,7 +22,7 @@ from .audio_analyzer import cancel_audio_analysis
 from .thumbnail_cache import cancel_pregeneration
 from .settings import get_video_folders, get_settings, update_settings, add_video_folder, remove_video_folder
 from .url_loader import start_download as ytdlp_start_download, fetch_video_info as ytdlp_fetch_video_info, get_active_downloads as ytdlp_get_active_downloads
-from .updater import check_for_update, get_cached_update, download_and_run_update
+from .updater import check_for_update, get_cached_update, get_update_status, start_update
 from .video_library import (
     get_cached_videos, scan_and_cache, stream_video, invalidate_cache,
     is_path_in_allowed_folders, generate_thumbnail,
@@ -241,8 +241,12 @@ async def check_update():
 
 @app.post("/update/apply")
 async def apply_update():
-    result = download_and_run_update(shutdown_callback=_shutdown_server)
-    return JSONResponse(content=result)
+    return JSONResponse(content=start_update(shutdown_callback=_shutdown_server))
+
+
+@app.get("/update/status")
+async def update_status():
+    return JSONResponse(content=get_update_status())
 
 
 # --- Video Library ---

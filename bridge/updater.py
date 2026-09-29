@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -20,6 +22,10 @@ _update_cache = {
     "release_url": None,
     "checked": False,
 }
+
+SHUTDOWN_DELAY = 2.0
+_status = {"state": "idle", "percent": 0, "error": None}
+_status_lock = threading.Lock()
 
 
 def _platform():
@@ -114,9 +120,50 @@ def get_cached_update():
     }
 
 
-def _download(url, dest):
+def get_update_status():
+    with _status_lock:
+        return dict(_status)
+
+
+def _set_status(**fields):
+    with _status_lock:
+        _status.update(fields)
+
+
+def start_update(shutdown_callback=None):
+    with _status_lock:
+        if _status["state"] in ("downloading", "installing"):
+            return {"success": True, "started": True}
+        if not _update_cache.get("download_url"):
+            return {"success": False, "error": "No download URL available"}
+        _status.update(state="downloading", percent=0, error=None)
+    threading.Thread(target=_run_update, args=(shutdown_callback,), daemon=True).start()
+    return {"success": True, "started": True}
+
+
+def _run_update(shutdown_callback):
+    result = download_and_run_update(progress=lambda percent: _set_status(percent=percent))
+    if not result.get("success"):
+        _set_status(state="failed", error=result.get("error") or "The update failed.")
+        return
+    _set_status(state="manual" if result.get("manual") else "installing", percent=100)
+    if shutdown_callback:
+        time.sleep(SHUTDOWN_DELAY)
+        shutdown_callback()
+
+
+def _download(url, dest, progress=None):
     with urlopen(Request(url), timeout=120) as resp, open(dest, "wb") as f:
-        shutil.copyfileobj(resp, f, 1024 * 1024)
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+            done += len(chunk)
+            if progress and total:
+                progress(min(99, done * 100 // total))
 
 
 def _mac_app_bundle():
@@ -164,12 +211,12 @@ def _install_mac_update(dmg_path):
         return False
 
 
-def _install_linux_update(url):
+def _install_linux_update(url, progress=None):
     target = os.environ.get("APPIMAGE")
     if not target:
         return {"success": False, "error": "Only the AppImage can update itself. Download the new version from the release page."}
     staged = target + ".new"
-    _download(url, staged)
+    _download(url, staged, progress)
     os.chmod(staged, 0o755)
     os.replace(staged, target)
     env = system_env()
@@ -180,7 +227,7 @@ def _install_linux_update(url):
     return {"success": True}
 
 
-def download_and_run_update(shutdown_callback=None):
+def download_and_run_update(shutdown_callback=None, progress=None):
     """Download the latest version, install it, then signal shutdown."""
     url = _update_cache.get("download_url")
     if not url:
@@ -195,7 +242,7 @@ def download_and_run_update(shutdown_callback=None):
 
         if platform == "win32":
             installer_path = os.path.join(tmp_dir, f"ScriptCompilerBridge-Setup-{version}.exe")
-            _download(url, installer_path)
+            _download(url, installer_path, progress)
             logger.info("Installer saved to %s, launching...", installer_path)
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -209,7 +256,7 @@ def download_and_run_update(shutdown_callback=None):
 
         elif platform == "darwin":
             dmg_path = os.path.join(tmp_dir, f"ScriptCompilerBridge-{version}-macOS.dmg")
-            _download(url, dmg_path)
+            _download(url, dmg_path, progress)
             if _install_mac_update(dmg_path):
                 result = {"success": True}
             else:
@@ -217,7 +264,7 @@ def download_and_run_update(shutdown_callback=None):
                 result = {"success": True, "manual": True}
 
         elif platform.startswith("linux"):
-            result = _install_linux_update(url)
+            result = _install_linux_update(url, progress)
             if not result["success"]:
                 return result
 
