@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import uuid
@@ -168,6 +169,12 @@ async def fetch_video_info(url: str) -> dict:
     }
 
 
+def _process_group_kwargs():
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+    return {"start_new_session": True}
+
+
 async def start_download(url: str, websocket_broadcast, video_info=None) -> tuple:
     """
     Start downloading url. Returns (download_id, file_path).
@@ -196,11 +203,9 @@ async def start_download(url: str, websocket_broadcast, video_info=None) -> tupl
         raise ValueError("yt-dlp binary not found. Please reinstall the bridge.")
     quality = _get_quality()
 
-    # On Windows, create a new process group so we can kill the entire tree
+    # Start a new process group so cancel can kill the entire tree
     # (yt-dlp may spawn ffmpeg child processes that outlive the parent)
-    kwargs = {}
-    if sys.platform == "win32":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    kwargs = _process_group_kwargs()
 
     proc = await asyncio.create_subprocess_exec(
         ytdlp,
@@ -304,7 +309,7 @@ def cancel_download(download_id: str) -> bool:
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
         else:
-            proc.kill()
+            os.killpg(proc.pid, signal.SIGKILL)
     except Exception:
         pass
     return True
