@@ -45,9 +45,12 @@ def stop_tray():
         _tray_icon.stop()
 
 
+def editor_base_url():
+    return (os.environ.get("SC_EDITOR_URL") or EDITOR_URL).rstrip("/")
+
+
 def editor_url():
-    base = os.environ.get("SC_EDITOR_URL") or EDITOR_URL
-    return base.rstrip("/") + "/?bridge=connect"
+    return editor_base_url() + "/?bridge=connect"
 
 
 def open_url(url):
