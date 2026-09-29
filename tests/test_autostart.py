@@ -39,3 +39,29 @@ def test_sync_does_nothing_when_run_from_source(monkeypatch):
     calls = _patch(monkeypatch, None, True)
     settings.sync_autostart()
     assert calls == []
+
+
+def test_appimage_path_is_the_app_executable(monkeypatch):
+    monkeypatch.setenv("APPIMAGE", "/home/me/ScriptCompilerBridge.AppImage")
+    assert settings._get_app_executable() == "/home/me/ScriptCompilerBridge.AppImage"
+
+
+def test_linux_autostart_writes_and_removes_the_entry(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "_platform", lambda: "linux")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("APPIMAGE", "/home/me/ScriptCompilerBridge.AppImage")
+    settings._set_autostart(True)
+    entry = tmp_path / "autostart" / "scriptcompiler-bridge.desktop"
+    assert "--autostart" in entry.read_text(encoding="utf-8")
+    assert settings._get_autostart() is True
+    settings._set_autostart(False)
+    assert not entry.exists()
+    assert settings._get_autostart() is False
+
+
+def test_linux_autostart_needs_the_app(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "_platform", lambda: "linux")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.delenv("APPIMAGE", raising=False)
+    settings._set_autostart(True)
+    assert settings._get_autostart() is False

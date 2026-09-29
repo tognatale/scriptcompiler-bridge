@@ -7,6 +7,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 from .config import SETTINGS_DIR_NAME, SETTINGS_FILE_NAME
+from . import linux_desktop
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,9 @@ def update_settings(updates: dict):
 
 def _get_app_executable():
     """Get the path to the bridge executable."""
+    appimage = os.environ.get("APPIMAGE")
+    if appimage:
+        return appimage
     if getattr(sys, 'frozen', False):
         return sys.executable
     return None
@@ -146,21 +150,49 @@ def sync_autostart():
         _set_autostart(True)
 
 
+def _platform():
+    return sys.platform
+
+
 def _get_autostart():
     """Check if autostart is currently enabled in the OS."""
-    if sys.platform == 'win32':
+    platform = _platform()
+    if platform == 'win32':
         return _get_autostart_windows()
-    elif sys.platform == 'darwin':
+    elif platform == 'darwin':
         return _get_autostart_macos()
+    elif platform.startswith('linux'):
+        return linux_desktop.autostart_path().exists()
     return False
 
 
 def _set_autostart(enabled):
     """Enable or disable autostart in the OS."""
-    if sys.platform == 'win32':
+    platform = _platform()
+    if platform == 'win32':
         _set_autostart_windows(enabled)
-    elif sys.platform == 'darwin':
+    elif platform == 'darwin':
         _set_autostart_macos(enabled)
+    elif platform.startswith('linux'):
+        _set_autostart_linux(enabled)
+
+
+def _set_autostart_linux(enabled):
+    path = linux_desktop.autostart_path()
+    if not enabled:
+        path.unlink(missing_ok=True)
+        logger.info("Autostart disabled (Linux)")
+        return
+    exe_path = _get_app_executable()
+    if not exe_path:
+        logger.warning("Cannot enable autostart: not running as frozen executable")
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(linux_desktop.desktop_entry(exe_path, autostart=True), encoding="utf-8")
+        logger.info("Autostart enabled (Linux): %s", path)
+    except OSError as e:
+        logger.error("Failed to write the autostart entry: %s", e)
 
 
 def _get_autostart_windows():
