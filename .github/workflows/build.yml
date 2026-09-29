@@ -90,6 +90,12 @@ jobs:
             chmod +x ffmpeg/ffmpeg
           fi
 
+      - name: Download yt-dlp (macOS)
+        run: |
+          mkdir -p yt-dlp
+          curl -fsSL -o yt-dlp/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+          chmod +x yt-dlp/yt-dlp
+
       - name: Build with PyInstaller
         run: pyinstaller bridge.spec --noconfirm
 
@@ -122,8 +128,53 @@ jobs:
           name: macos-dmg
           path: dist/ScriptCompilerBridge-*-macOS.dmg
 
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller pytest httpx
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Download ffmpeg and yt-dlp (Linux)
+        run: |
+          mkdir -p ffmpeg yt-dlp /tmp/ff
+          curl -fsSL -o /tmp/ffmpeg.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ff
+          cp "$(find /tmp/ff -type f -path '*/bin/ffmpeg' | head -1)" ffmpeg/ffmpeg
+          curl -fsSL -o yt-dlp/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+          chmod +x ffmpeg/ffmpeg yt-dlp/yt-dlp
+
+      - name: Build with PyInstaller
+        run: pyinstaller bridge.spec --noconfirm
+
+      - name: Extract version
+        id: version
+        run: |
+          VER=$(python -c "from bridge.config import BRIDGE_VERSION; print(BRIDGE_VERSION)")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build AppImage
+        run: bash packaging/linux/build-appimage.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/ScriptCompilerBridge-*-x86_64.AppImage
+
   release:
-    needs: [build-windows, build-macos]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -135,7 +186,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: |
             artifacts/windows-installer/*
             artifacts/macos-dmg/*
+            artifacts/linux-appimage/*
           generate_release_notes: true
