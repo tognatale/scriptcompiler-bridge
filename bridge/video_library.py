@@ -166,13 +166,14 @@ CHUNK_SIZE = 64 * 1024  # 64KB
 _cached_videos = None
 
 
+def is_inside(path, folder):
+    prefix = folder if folder.endswith(os.sep) else folder + os.sep
+    return path == folder or path.startswith(prefix)
+
+
 def is_path_in_allowed_folders(file_path, folders):
     real_path = os.path.realpath(file_path)
-    for folder in folders:
-        real_folder = os.path.realpath(folder)
-        if real_path.startswith(real_folder + os.sep) or real_path == real_folder:
-            return True
-    return False
+    return any(is_inside(real_path, os.path.realpath(folder)) for folder in folders)
 
 
 def scan_video_folders(folders=None):

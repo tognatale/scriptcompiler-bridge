@@ -126,6 +126,15 @@ def test_live_refresh_from_another_thread_without_a_loop_does_nothing(monkeypatc
     server.notify_capabilities_changed()
 
 
+def test_a_drive_root_folder_allows_its_files(tmp_path):
+    assert video_library.is_path_in_allowed_folders(str(tmp_path / "clip.mp4"), [tmp_path.anchor])
+
+
+def test_a_folder_does_not_allow_a_sibling_with_the_same_start(tmp_path):
+    folder = str(tmp_path / "videos")
+    assert not video_library.is_path_in_allowed_folders(str(tmp_path / "videos2" / "clip.mp4"), [folder])
+
+
 def test_pick_without_a_picker_explains_what_to_install(client, monkeypatch, broadcasts):
     def missing():
         raise PickerUnavailable("Install zenity")

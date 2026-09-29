@@ -1,6 +1,38 @@
+import asyncio
+import os
+
 import pytest
 
 from bridge import url_loader
+
+
+class FakeYtdlp:
+    def __init__(self, stdout=b"", stderr=b"", returncode=0):
+        self.stdout_bytes = stdout
+        self.stderr_bytes = stderr
+        self.returncode = returncode
+
+    async def communicate(self):
+        return self.stdout_bytes, self.stderr_bytes
+
+
+@pytest.fixture
+def ytdlp(monkeypatch):
+    def use(proc):
+        async def fake_exec(*args, **kwargs):
+            return proc
+
+        monkeypatch.setattr(url_loader, "get_ytdlp_path", lambda: "yt-dlp")
+        monkeypatch.setattr(url_loader.asyncio, "create_subprocess_exec", fake_exec)
+
+    return use
+
+
+def test_downloads_into_a_drive_root_folder(ytdlp, tmp_path):
+    target = str(tmp_path / "clip [abc].mp4")
+    ytdlp(FakeYtdlp(stdout=target.encode()))
+    result = asyncio.run(url_loader.get_output_filename("https://x", tmp_path.anchor))
+    assert result == os.path.realpath(target)
 
 
 class FakeProc:

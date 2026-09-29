@@ -10,7 +10,7 @@ import logging
 
 from .settings import get_settings, get_video_folders
 from .ytdlp_utils import get_ytdlp_path
-from .video_library import scan_and_cache as _scan_and_cache
+from .video_library import is_inside, scan_and_cache as _scan_and_cache
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +102,7 @@ async def get_output_filename(url: str, output_folder: str, output_template: str
     filename = os.path.realpath(lines[0])
 
     # Ensure the resolved path stays within the output folder
-    real_folder = os.path.realpath(output_folder)
-    if not filename.startswith(real_folder + os.sep) and filename != real_folder:
+    if not is_inside(filename, os.path.realpath(output_folder)):
         raise ValueError("Output path escaped the video folder")
 
     return filename
