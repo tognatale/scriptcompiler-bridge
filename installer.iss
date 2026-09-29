@@ -33,6 +33,7 @@ CloseApplications=yes
 RestartApplications=no
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
+ChangesAssociations=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -58,6 +59,17 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 ; The bridge can also add this value itself, so always remove it on uninstall
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: none; ValueName: "ScriptCompilerBridge"; Flags: uninsdeletevalue
+; Open .funscript files with the bridge. It is the default only when no other app is.
+Root: HKA; Subkey: "Software\Classes\ScriptCompilerBridge.funscript"; \
+    ValueType: string; ValueName: ""; ValueData: "Funscript"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\ScriptCompilerBridge.funscript\DefaultIcon"; \
+    ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
+Root: HKA; Subkey: "Software\Classes\ScriptCompilerBridge.funscript\shell\open\command"; \
+    ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+Root: HKA; Subkey: "Software\Classes\.funscript\OpenWithProgids"; \
+    ValueType: string; ValueName: "ScriptCompilerBridge.funscript"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.funscript"; \
+    ValueType: string; ValueName: ""; ValueData: "ScriptCompilerBridge.funscript"; Check: FunscriptHasNoDefault
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; \
@@ -77,4 +89,23 @@ begin
   Exec('taskkill', '/F /IM ScriptCompilerBridge.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill', '/F /IM tracker.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Result := True;
+end;
+
+function FunscriptHasNoDefault(): Boolean;
+var
+  Current: String;
+begin
+  Result := not RegKeyExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.funscript\UserChoice');
+  if Result and RegQueryStringValue(HKCR, '.funscript', '', Current) then
+    Result := (Current = '') or (Current = 'ScriptCompilerBridge.funscript');
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Current: String;
+begin
+  if (CurUninstallStep = usPostUninstall) and
+     RegQueryStringValue(HKA, 'Software\Classes\.funscript', '', Current) and
+     (Current = 'ScriptCompilerBridge.funscript') then
+    RegDeleteValue(HKA, 'Software\Classes\.funscript', '');
 end;
