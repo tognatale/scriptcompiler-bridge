@@ -17,7 +17,7 @@ if [ ! -f "ffmpeg/ffmpeg" ]; then
     echo "Downloading ffmpeg..."
     mkdir -p ffmpeg
 
-    FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip"
+    FFMPEG_URL="https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip"
 
     curl -L "$FFMPEG_URL" -o ffmpeg/ffmpeg.zip
     unzip -o ffmpeg/ffmpeg.zip -d ffmpeg/
