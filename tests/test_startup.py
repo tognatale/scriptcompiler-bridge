@@ -100,3 +100,14 @@ def test_wait_for_server_sees_a_dead_server_thread():
 
 def test_wait_for_server_gives_up_after_the_timeout():
     assert startup.wait_for_server(FakeServer(False), FakeThread(True), timeout=0.3, poll=0.05) is False
+
+
+def test_wait_for_port_free_returns_once_the_port_is_free(monkeypatch):
+    states = iter(["bridge", "bridge", "free"])
+    monkeypatch.setattr(startup, "probe_port", lambda host, port, timeout=1.0: next(states))
+    assert startup.wait_for_port_free("127.0.0.1", 9876, timeout=2, poll=0.01) is True
+
+
+def test_wait_for_port_free_gives_up(monkeypatch):
+    monkeypatch.setattr(startup, "probe_port", lambda host, port, timeout=1.0: "bridge")
+    assert startup.wait_for_port_free("127.0.0.1", 9876, timeout=0.1, poll=0.02) is False

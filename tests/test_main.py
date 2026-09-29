@@ -57,3 +57,32 @@ def test_announce_first_run_opens_the_editor_once(calls):
     main.announce(["notify_running", "open_editor"])
     assert calls["editor"] == 1
     assert calls["marked"] == 1
+
+
+def test_linux_runs_without_a_tray(monkeypatch):
+    monkeypatch.setattr(main.sys, "platform", "linux")
+    assert main.use_tray(main.parse_args([])) is False
+
+
+def test_windows_uses_the_tray_unless_turned_off(monkeypatch):
+    monkeypatch.setattr(main.sys, "platform", "win32")
+    assert main.use_tray(main.parse_args([])) is True
+    assert main.use_tray(main.parse_args(["--no-tray"])) is False
+
+
+@pytest.mark.parametrize("platform, text", [
+    ("win32", "system tray"),
+    ("darwin", "menu bar"),
+    ("linux", "in the background"),
+])
+def test_running_message_matches_the_system(monkeypatch, platform, text):
+    monkeypatch.setattr(main.sys, "platform", platform)
+    assert text in main.running_message()
+
+
+def test_start_after_an_update_waits_for_the_old_bridge(monkeypatch, calls):
+    waited = []
+    monkeypatch.setattr(main, "wait_for_port_free", lambda host, port: waited.append(port))
+    monkeypatch.setattr(main, "probe_port", lambda host, port: "bridge")
+    main.main(["--updated", "--port", "9899"])
+    assert waited == [9899]

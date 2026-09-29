@@ -57,3 +57,12 @@ def wait_for_server(server, thread, timeout=30.0, poll=0.1):
             return False
         time.sleep(poll)
     return bool(server.started)
+
+
+def wait_for_port_free(host, port, timeout=20.0, poll=0.25):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if probe_port(host, port, timeout=1.0) == "free":
+            return True
+        time.sleep(poll)
+    return False

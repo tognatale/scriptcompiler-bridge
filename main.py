@@ -14,11 +14,14 @@ import uvicorn
 
 from bridge.config import DEFAULT_PORT, DEFAULT_HOST, BRIDGE_NAME, BRIDGE_VERSION
 from bridge.desktop import notify, open_editor, show_error, stop_tray
+from bridge.linux_desktop import install_menu_entry
 from bridge.logs import log_dir, setup_logging
 from bridge.request_guard import allow_bind_host
 from bridge.server import set_shutdown_callback
 from bridge.settings import sync_autostart
-from bridge.startup import is_first_run, mark_first_run_done, probe_port, startup_actions, wait_for_server
+from bridge.startup import (
+    is_first_run, mark_first_run_done, probe_port, startup_actions, wait_for_port_free, wait_for_server,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +43,26 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def _where():
-    return "menu bar" if sys.platform == "darwin" else "system tray"
+def _is_linux():
+    return sys.platform.startswith("linux")
+
+
+def use_tray(args):
+    return not args.no_tray and not _is_linux()
+
+
+def running_message():
+    if sys.platform == "darwin":
+        return "ScriptCompiler Bridge is running. You can find it in the menu bar."
+    if _is_linux():
+        return "ScriptCompiler Bridge is running in the background."
+    return "ScriptCompiler Bridge is running. You can find it in the system tray."
 
 
 def announce(actions):
     for action in actions:
         if action == "notify_running":
-            notify(BRIDGE_NAME, f"ScriptCompiler Bridge is running. You can find it in the {_where()}.")
+            notify(BRIDGE_NAME, running_message())
         elif action == "notify_updated":
             notify(BRIDGE_NAME, f"ScriptCompiler Bridge was updated to version {BRIDGE_VERSION} and is running.")
         elif action == "open_editor":
@@ -62,6 +77,9 @@ def main(argv=None):
 
     logger.info("Starting %s v%s on %s:%d", BRIDGE_NAME, BRIDGE_VERSION, args.host, args.port)
 
+    if args.updated:
+        wait_for_port_free(args.host, args.port)
+
     state = probe_port(args.host, args.port)
     if state == "bridge":
         logger.info("The bridge is already running, opening the editor")
@@ -70,6 +88,9 @@ def main(argv=None):
     if state == "other":
         show_error(f"Port {args.port} is used by another program. Close that program, then start ScriptCompiler Bridge again.")
         return 1
+
+    if _is_linux() and os.environ.get("APPIMAGE"):
+        install_menu_entry(os.environ["APPIMAGE"], os.environ.get("APPDIR"))
 
     actions = startup_actions(args.autostart, args.updated, is_first_run())
     sync_autostart()
@@ -100,7 +121,7 @@ def main(argv=None):
         show_error(f"ScriptCompiler Bridge could not start. The log file in {log_dir()} has the details.")
         return 1
 
-    if args.no_tray:
+    if not use_tray(args):
         announce(actions)
     else:
         try:
